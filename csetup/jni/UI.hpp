@@ -4,8 +4,11 @@
 #include <sys/types.h>
 
 #include <list>
+#include <map>
+#include <vector>
 #include <algorithm>
 
+#include "Image.hpp"
 
 struct rgb
 {
@@ -13,7 +16,7 @@ struct rgb
 
 	inline rgb(unsigned int r, unsigned int g, unsigned int b)
 	{
-		m_rgb = (r << 16) | (g << 8) | (b);
+		m_rgb = (b << 16) | (g << 8) | (r);
 	}
 
 	operator u_int32_t () const 
@@ -21,7 +24,7 @@ struct rgb
 		return m_rgb;
 	}
 
-	unsigned char r() const 
+	unsigned char b() const 
 	{
 		return (m_rgb & 0x00ff0000 ) >> 16;
 	}
@@ -31,7 +34,7 @@ struct rgb
 		return (m_rgb & 0x0000ff00 ) >> 8;
 	}
 
-	unsigned char b() const 
+	unsigned char r() const 
 	{
 		return (m_rgb & 0x000000ff ) >> 0;
 	}
@@ -68,6 +71,12 @@ public:
 		, m_y(y) 
 	{
 	}
+
+	inline Point()
+		: m_x(0)
+		, m_y(0)
+	{
+	}
 };
 
 class Size
@@ -99,6 +108,12 @@ public:
 	inline Size(int w, int h) 
 		: m_width(w)
 		, m_height(h) 
+	{
+	}
+
+	inline Size()
+		: m_width(0)
+		, m_height(0)
 	{
 	}
 };
@@ -134,6 +149,13 @@ public:
 		, size(w,h) 
 	{ 
 	}
+	
+	inline Rect()  
+		: origin()
+		, size() 
+	{ 
+	}
+
 public:
 	inline bool inside(const Point& pt) 
 	{
@@ -240,6 +262,8 @@ public:
 	
 	virtual void fill(const Rect& area, const rgb& p) = 0;
 
+	virtual void drawImage(const Point& dstPos, const Image* srcImg, const Rect& srcRect, bool negative) = 0;
+
 	virtual void invalidate() = 0;
 };
 
@@ -255,6 +279,27 @@ class BasicButton : public IWidget
 	IGraphics* m_gc;
 
 	bool m_active;
+
+protected:
+	inline IGraphics* gc() const
+	{
+		return m_gc;
+	}
+
+	inline bool isActive() const
+	{
+		return m_active;
+	}
+
+	const Rect& visualRect() const 
+	{
+		return m_visualRect;
+	}
+
+	const Rect& activeRect() const
+	{
+		return m_activeRect;
+	}
 
 public:
 	inline BasicButton(
@@ -272,7 +317,7 @@ public:
 	{
 	}
 	
-	inline void draw( )
+	void draw( )
 	{
 		if ( m_active ) 
 		{
@@ -307,6 +352,194 @@ public:
 	}
 };
 
+class ImageRscSet
+{
+	Image* m_image;
+
+	std::map<int, Rect> m_rects;
+
+public:
+	ImageRscSet(Image *img)
+		: m_image (img)
+	{
+	}
+
+	void addRes(int id, const Rect& rect)
+	{
+		m_rects.insert(std::make_pair(id, rect));
+	}
+
+	const Rect& getRectForId(int id) const
+	{
+		static Rect stub(0,0,0,0);
+
+		std::map<int, Rect>::const_iterator pos = m_rects.find(id);
+		
+		if ( pos != m_rects.end() ) 
+		{
+			return pos->second;
+		}
+
+		return stub;
+	}
+
+	Image* getImage() const
+	{
+		return m_image;
+	}
+};
+
+
+class ImageButton : public BasicButton 
+{
+	std::vector<Point> m_dstImagePointsVect;
+	
+	std::vector<Image*> m_srcImagesVect;
+
+	std::vector<Rect> m_srcImageRectsVect;
+
+	int m_activeImage;
+
+public:
+	inline ImageButton(
+			IGraphics* gc, 
+			const Rect& visual, 
+			const Rect& active, 
+			const rgb& color, 
+			const rgb& activeColor,
+			const Point& imgBasePoint,
+			Image* srcImg, 
+			const Rect& srcImgRect
+			)
+		: BasicButton(gc, visual, active, color, activeColor)
+		, m_activeImage(0)
+		, m_dstImagePointsVect( 1 ) // sz
+		, m_srcImagesVect ( 1 ) // sz
+		, m_srcImageRectsVect ( 1 ) // sz
+	{
+		m_dstImagePointsVect[0] = 
+			Point( visual.getOrigin().getX() + imgBasePoint.getX(), 
+		      	    	visual.getOrigin().getY() + imgBasePoint.getY() );
+
+		m_srcImageRectsVect[0] = srcImgRect;
+
+		m_srcImagesVect[0] = srcImg;
+	}
+	
+	inline ImageButton(
+			IGraphics* gc, 
+			const Rect& visual, 
+			const Rect& active, 
+			const rgb& color, 
+			const rgb& activeColor,
+			const Point& imgBasePoint,
+			ImageRscSet* rscSet, 
+			int imgResId
+			)
+		: BasicButton(gc, visual, active, color, activeColor)
+		, m_activeImage(0)
+		, m_dstImagePointsVect( 1 ) // sz
+		, m_srcImagesVect ( 1 ) // sz
+		, m_srcImageRectsVect ( 1 ) // sz
+	{
+		m_dstImagePointsVect[0] = 
+			Point( visual.getOrigin().getX() + imgBasePoint.getX(), 
+		      	    	visual.getOrigin().getY() + imgBasePoint.getY() );
+
+		m_srcImageRectsVect[0] = rscSet->getRectForId(imgResId);
+
+		m_srcImagesVect[0] = rscSet->getImage();
+
+	}
+
+	inline ImageButton(
+			IGraphics* gc, 
+			const Rect& visual, 
+			const Rect& active, 
+			const rgb& color, 
+			const rgb& activeColor,
+			const Point& imgBasePoint,
+			ImageRscSet* rscSet, 
+			int imgResId0,
+			int imgResId1
+			)
+		: BasicButton(gc, visual, active, color, activeColor)
+		, m_activeImage(0)
+		, m_dstImagePointsVect( 2 ) // sz
+		, m_srcImagesVect ( 2 ) // sz
+		, m_srcImageRectsVect ( 2 ) // sz
+	{
+		m_dstImagePointsVect[0] = 
+			Point( visual.getOrigin().getX() + imgBasePoint.getX(), 
+		      	    	visual.getOrigin().getY() + imgBasePoint.getY() );
+
+		m_srcImageRectsVect[0] = rscSet->getRectForId(imgResId0);
+
+		m_srcImagesVect[0] = rscSet->getImage();
+
+		m_dstImagePointsVect[1] = 
+			Point( visual.getOrigin().getX() + imgBasePoint.getX(), 
+		      	    	visual.getOrigin().getY() + imgBasePoint.getY() );
+
+		m_srcImageRectsVect[1] = rscSet->getRectForId(imgResId1);
+
+		m_srcImagesVect[1] = rscSet->getImage();
+
+
+	}
+
+	inline ImageButton(
+			IGraphics* gc, 
+			const Rect& visual, 
+			const Rect& active, 
+			const rgb& color, 
+			const rgb& activeColor,
+			const std::vector<Point>& imgBasePoints,
+			ImageRscSet* rscSet, 
+			std::vector<int>& imgResIds
+			)
+		: BasicButton(gc, visual, active, color, activeColor)
+		, m_activeImage(0)
+		, m_dstImagePointsVect( imgResIds.size() ) // sz
+		, m_srcImagesVect ( imgResIds.size() ) // sz
+		, m_srcImageRectsVect ( imgResIds.size() ) // sz
+	{
+		for (int i=0; i<imgResIds.size(); i++)
+		{
+			m_dstImagePointsVect[i] = 
+				Point( visual.getOrigin().getX() + imgBasePoints[i].getX(), 
+					visual.getOrigin().getY() + imgBasePoints[i].getY() );
+
+			m_srcImageRectsVect[i] = rscSet->getRectForId(imgResIds[i]);
+
+			m_srcImagesVect[i] = rscSet->getImage();
+		}
+	}
+
+	void setActiveImage(int nr)
+	{
+		m_activeImage = nr % m_srcImageRectsVect.size();
+		gc()->invalidate();
+	}
+
+	void draw( )
+	{
+		// fill the rectangle of btn with bg color first
+		this->BasicButton::draw();
+
+		if ( m_srcImagesVect[ m_activeImage ] ) 
+		{
+			bool invertColor = isActive();
+
+			gc()->drawImage(
+					m_dstImagePointsVect[m_activeImage], 
+					m_srcImagesVect[m_activeImage], 
+					m_srcImageRectsVect[m_activeImage], 
+					invertColor 
+				);
+		}
+	}
+};
 
 
 #endif

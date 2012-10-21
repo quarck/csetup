@@ -13,7 +13,6 @@
 #include <linux/fb.h>
 #include <unistd.h>
 
-
 class FrameBuffer 
 	: public IGraphics
 {
@@ -142,49 +141,112 @@ public:
 		  	x * m_bytes_per_pixel;
 	}
 
-	void fill(const rgb& p)
+	void fill(const rgb& clr)
 	{
-		unsigned char *wptr = m_fb + offsetForPosition(0, 0, m_active_buffer);
-
-		unsigned char r = p.r(), g = p.g(), b = p.b();
+		u_int32_t *wptr = (u_int32_t*)(m_fb + offsetForPosition(0, 0, m_active_buffer));
 
 		for ( int y = 0; y < m_vinfo.yres; y ++ )
 		{
 			for ( int x = 0; x < m_vinfo.xres; x ++ )
 			{
-				*wptr++ = b;
-				*wptr++ = g;
-				*wptr++ = r;
-				wptr++;
+				*wptr++ = clr;
 			}
 		}
 	}
 
 
-	void fill(const Rect& area, const rgb& p)
+	void fill(const Rect& area, const rgb& clr)
 	{
-		unsigned char r = p.r(), g = p.g(), b = p.b();
-
 		for ( int y = 0; y < area.getSize().getHeight(); y ++ )
 		{
-			unsigned char *wptr = 
-				m_fb 
-				+ 
-				offsetForPosition(
-						area.getOrigin().getX(), 
-						area.getOrigin().getY() + y, 
-						m_active_buffer
-					);
+			u_int32_t *wptr = 
+				(u_int32_t*)(
+					m_fb 
+					+ 
+					offsetForPosition(
+							area.getOrigin().getX(), 
+							area.getOrigin().getY() + y, 
+							m_active_buffer
+						)
+				);
 
 			for ( int x = 0; x < area.getSize().getWidth(); x ++ )
 			{
-				*wptr++ = b;
-				*wptr++ = g;
-				*wptr++ = r;
-				wptr++;
+				*wptr++ = clr;
 			}
 		}
 	}	
+	
+	void drawImage(const Point& dst, const Image* img, const Rect& srcRect, bool negative)
+	{
+		int width = srcRect.getSize().getWidth();
+		int height = srcRect.getSize().getHeight();
+
+		int len = width * img->bytesPerPixel(); 
+
+		u_int32_t dstStartingOffset = 
+			offsetForPosition(
+					dst.getX(), 
+					dst.getY(), 
+					m_active_buffer
+				);
+		u_int32_t dstPtrStep = 
+			offsetForPosition(
+					dst.getX(), 
+					dst.getY() + 1, 
+					m_active_buffer
+				) 
+				- 
+				dstStartingOffset;
+
+		dstPtrStep /= sizeof(u_int32_t);
+
+		u_int32_t srcStartingOffset = 
+			img->offsetForPosition(
+					srcRect.getOrigin().getX(), 
+					srcRect.getOrigin().getY() 
+				);
+		u_int32_t srcPtrStep = 
+			img->offsetForPosition(
+					srcRect.getOrigin().getX(), 
+					srcRect.getOrigin().getY() + 1 
+				) 
+				- 
+				srcStartingOffset;
+
+		srcPtrStep /= sizeof(u_int32_t);
+
+
+		u_int32_t *w_ptr = (u_int32_t*) ( m_fb + dstStartingOffset );
+		u_int32_t *r_ptr = (u_int32_t*) ( img->buffer() + srcStartingOffset ); 
+
+		if ( !negative )
+		{
+			for ( int y = 0; y < height; y ++ )
+			{
+				memcpy(w_ptr, r_ptr, len);
+				w_ptr += dstPtrStep;
+				r_ptr += srcPtrStep;
+			}
+		}
+		else
+		{
+			for ( int y = 0; y < height; y ++ )
+			{
+				u_int32_t *w = w_ptr;
+				u_int32_t *r = r_ptr;
+
+				for (int x = 0; x < width; x ++ )
+				{
+					*w = (~*r)&0x00ffffff;
+					w++; r++;
+				}
+				
+				w_ptr += dstPtrStep;
+				r_ptr += srcPtrStep;
+			}
+		}
+	}
 	
 	void invalidate()
 	{

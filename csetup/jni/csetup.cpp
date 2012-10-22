@@ -103,7 +103,7 @@ public:
 		if ( m_fb->needsUpdate() ) 
 		{
 			m_fb->nextActiveBuffer();
-			m_fb->fill(rgb(127, 127, 127));
+			m_fb->fill( m_fb->getBGColor() );
 
 			this->draw();
 
@@ -113,25 +113,25 @@ public:
 	}
 };
 
-
-class QuitButton : public ImageButton
+class LetterButton: public ImageButton
 {
-	UIManager *m_manager;
+	TextEdit * m_edit;
+	int m_char;
+	int m_charShifted;
 public:
-	inline QuitButton(
-			UIManager * manager,
-			FrameBuffer* fb, 
+	LetterButton(
+			TextEdit* edit, 
+			FrameBuffer *fb, 
 			const Rect& visual, 
 			const Rect& active, 
-			const rgb& color, 
-			const rgb& activeColor,
 			const Point& imgBasePoint,
 			ImageRscSet* rscSet, 
-			int imgResId0,
-			int imgResId1
-			)
-		: ImageButton(fb, visual, active, color, activeColor, imgBasePoint, rscSet, imgResId0, imgResId1 )
-		, m_manager ( manager )
+			int chr, int chrShifted	
+		)
+		: ImageButton(fb, visual, active, imgBasePoint, rscSet, chr, chrShifted)
+		, m_edit (edit)
+		, m_char (chr)
+		, m_charShifted (chrShifted)
 	{
 	}
 
@@ -141,11 +141,109 @@ public:
 
 		if ( hitTest(pt) ) 
 		{
-			m_manager->setShouldQuit();
+			m_edit->appendChar(m_char);
 		}
 	}
 };
-	
+
+class BackspaceButton: public ImageButton
+{
+	TextEdit * m_edit;
+public:
+	BackspaceButton(
+			TextEdit* edit, 
+			FrameBuffer *fb, 
+			const Rect& visual, 
+			const Rect& active, 
+			const Point& imgBasePoint,
+			ImageRscSet* rscSet, 
+			int chr
+		)
+		: ImageButton(fb, visual, active, imgBasePoint, rscSet, chr)
+		, m_edit (edit)
+	{
+	}
+
+	void onTouchUp(const Point& pt)
+	{
+		this->BasicButton::onTouchUp(pt);
+
+		if ( hitTest(pt) ) 
+		{
+			m_edit->backspace();
+		}
+	}
+};
+
+
+class QuitButton : public ImageButton
+{
+	UIManager *m_manager;
+	TextEdit *m_edit;
+public:
+	inline QuitButton(
+			UIManager * manager,
+			TextEdit  * edit,
+			FrameBuffer* fb, 
+			const Rect& visual, 
+			const Rect& active, 
+			const Point& imgBasePoint,
+			ImageRscSet* rscSet, 
+			int imgResId
+			)
+		: ImageButton(fb, visual, active, imgBasePoint, rscSet, imgResId)
+		, m_manager ( manager )
+		, m_edit ( edit )
+	{
+	}
+
+	void onTouchUp(const Point& pt)
+	{
+		this->BasicButton::onTouchUp(pt);
+
+		if ( hitTest(pt) ) 
+		{
+			m_edit->hideLastChr();
+
+			if ( m_edit->getString() == "test123")
+			{
+				m_manager->setShouldQuit();
+			}
+		}
+	}
+};
+
+class ClearButton : public ImageButton
+{
+	UIManager *m_manager;
+	TextEdit *m_edit;
+public:
+	inline ClearButton(
+			UIManager * manager,
+			TextEdit  * edit,
+			FrameBuffer* fb, 
+			const Rect& visual, 
+			const Rect& active, 
+			const Point& imgBasePoint,
+			ImageRscSet* rscSet, 
+			int imgResId
+			)
+		: ImageButton(fb, visual, active, imgBasePoint, rscSet, imgResId)
+		, m_manager ( manager )
+		, m_edit ( edit )
+	{
+	}
+
+	void onTouchUp(const Point& pt)
+	{
+		this->BasicButton::onTouchUp(pt);
+
+		if ( hitTest(pt) ) 
+		{
+			m_edit->setString("");
+		}
+	}
+};
 
 int main(int argc, char *argv[])
 {
@@ -167,11 +265,34 @@ int main(int argc, char *argv[])
 
 	for (int i=0; i<sizeof(chars); i++) 
 	{
-		set.addRes(chars[i], Rect(30*i, 0, 30, 60));
+		set.addRes(chars[i], Rect(30*i, 0, 30, 55));
 	}
 
-	rgb color (255,255,255);
-	rgb colorActive(0,255,255);
+
+	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
+
+	manager.add(&edit);
+
+	ClearButton clearBtn(
+			&manager,
+			&edit,
+			&fb, 
+			Rect (540-50-5, 10, 50, 100), 
+			Rect (540-54-5, 10, 54, 100),
+			Point(10, 25), 
+			&set, 
+			'X'
+		);
+
+	manager.add(&clearBtn);
+
+	fb.setBGColor( rgb(127,127,127) );
+	fb.setColor( rgb(255,255,255 ) );
+
+	//char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~";
+	
+	char lineA[] = "-=_+[{]};:";
+	char lineB[] = "!@#$%^&*()";
 
 	char line0[] = "1234567890";
 
@@ -183,151 +304,167 @@ int main(int argc, char *argv[])
 
 	char line3lc[] = "zxcvbnm";
 	char line3uc[] = "ZXCVBNM";
-
-
+	
+	char lineZ[] = "'\"\\|,<.>/?`~";
 
 	int ybase = 200;
 	int xbase = 0;
 
-	for (int i=0; i<sizeof(line0)-1; i++ )
+	for (int i=0; i<sizeof(lineZ)-1; i++ )
 	{
-		Rect visual (i * 54 + xbase+2, ybase+10, 50, 60);
-		Rect active (i * 54 + xbase, ybase, 54, 80);
+		Rect visual (i * 45 + xbase, ybase, 45-4, 80-4);
+		Rect active (i * 45 + xbase - 2, ybase-2, 45, 80);
 
 		manager.add(  
-			new ImageButton( 
+			new LetterButton(
+				&edit,
 				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line0[i] 
+				Point(6, 15), 
+				&set, lineZ[i], lineZ[i]
 			   )
 		);
 
 	}
 	
-	ybase += 70;
+	ybase += 80;
+	
+	for (int i=0; i<sizeof(lineA)-1; i++ )
+	{
+		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+		manager.add(  
+			new LetterButton(
+				&edit,
+				&fb, visual, active, 
+				Point(10, 15), 
+				&set, lineA[i], lineA[i]
+			   )
+		);
+
+	}
+	
+	ybase += 80;
+
+	
+	for (int i=0; i<sizeof(lineB)-1; i++ )
+	{
+		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+		manager.add(  
+			new LetterButton(
+				&edit,
+				&fb, visual, active, 
+				Point(10, 15), 
+				&set, lineB[i], lineB[i]
+			   )
+		);
+
+	}
+	
+	ybase += 100;
+
+	for (int i=0; i<sizeof(line0)-1; i++ )
+	{
+		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+		manager.add(  
+			new LetterButton(
+				&edit,
+				&fb, visual, active, 
+				Point(10, 15), 
+				&set, line0[i], line0[i]
+			   )
+		);
+
+	}
+	
+	ybase += 80;
 
 	for (int i=0; i<sizeof(line1lc)-1; i++ )
 	{
-		Rect visual (i * 54 + xbase+2, ybase+10, 50, 60);
-		Rect active (i * 54 + xbase, ybase, 54, 80);
+		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
 
 		manager.add(  
-			new ImageButton( 
+			new LetterButton(
+				&edit,
 				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line1lc[i] 
-			   )
-		);
-
-		manager.add(  
-			new ImageButton( 
-				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line1uc[i] 
+				Point(10, 15), 
+				&set, line1lc[i], line1uc[i] 
 			   )
 		);
 	}
 
-	ybase += 70;
-	xbase += 54/2;
+	ybase += 80;
+	xbase += 54*2/3;
 
 	for (int i=0; i<sizeof(line2lc)-1; i++ )
 	{
-		Rect visual (i * 54 + xbase+2, ybase+10, 50, 60);
-		Rect active (i * 54 + xbase, ybase, 54, 80);
+		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
 
 		manager.add(  
-			new ImageButton( 
+			new LetterButton(
+				&edit,
 				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line2lc[i] 
-			   )
-		);
-
-		manager.add(  
-			new ImageButton( 
-				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line2uc[i] 
+				Point(10, 15), 
+				&set, line2lc[i], line2uc[i] 
 			   )
 		);
 	}
 
-	ybase += 70;
-	xbase += 54/2;
+	ybase += 80;
+	xbase += 54*2/3;
 
 	for (int i=0; i<sizeof(line3lc)-1; i++ )
 	{
-		Rect visual (i * 54 + xbase+2, ybase+10, 50, 60);
-		Rect active (i * 54 + xbase, ybase, 54, 80);
+		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
 
 		manager.add(  
-			new ImageButton( 
+			new LetterButton(
+				&edit,
 				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line3lc[i] 
-			   )
-		);
-
-		manager.add(  
-			new ImageButton( 
-				&fb, visual, active, 
-				color, colorActive,
-				Point(15, 0), 
-				&set, line3uc[i] 
+				Point(10, 15), 
+				&set, line3lc[i], line3uc[i]
 			   )
 		);
 	}
-
-	manager.add(  
-		new QuitButton(
-				&manager, 
+	
+	manager.add(
+			new BackspaceButton(
+				&edit,
 				&fb, 
-				Rect  (40,  40, 60, 60), 
-				Rect ( 30,  30, 80, 80),
-				color, 
-				colorActive,
-				Point(15, 0), 
+				Rect ( 7 * 54 + xbase + 10, ybase, 50, 80-4), 
+				Rect ( 7 * 53 + xbase + 10- 2, ybase-2, 54, 80),
+				Point(10, 15), 
 				&set, 
-				'q', 'Q'
+				'<'
 			)
 		);
 
-	/*
-	for (int ix = 0; ix < 6; ix ++ )
-	{
-		for (int iy = 0; iy < 10; iy ++ ) 
-		{
-			Rect visual (ix * 80 + 40, iy * 80 + 40, 60, 60);
-			Rect active (ix * 80 + 30, iy * 80 + 30, 80, 80);
 
-			manager.add(  
-				new ImageButton(
-					&fb, 
-					visual, 
-					active, 
-					color, 
-					colorActive,
-					Point(15, 0), 
-					&set, 
-					'X' 
-				   )
-			);
-		}
-	}
-*/
+	manager.add(  
+		new QuitButton(
+				&manager,
+				&edit,
+				&fb, 
+				Rect (40, 860, 60, 60), 
+				Rect (30, 850, 80, 80),
+				Point(15, 0), 
+				&set, 
+				'Q'
+			)
+		);
+
 	// request repainting
 	fb.invalidate();
 	manager.onIter();
 
 	manager.run();
-
 	
 	fb.nextActiveBuffer();
 	fb.fill(rgb(0, 0, 0));

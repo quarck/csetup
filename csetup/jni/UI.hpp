@@ -7,6 +7,7 @@
 #include <map>
 #include <vector>
 #include <algorithm>
+#include <string>
 
 #include "Image.hpp"
 
@@ -17,6 +18,13 @@ struct rgb
 	inline rgb(unsigned int r, unsigned int g, unsigned int b)
 	{
 		m_rgb = (b << 16) | (g << 8) | (r);
+	}
+
+	rgb negative()
+	{
+		rgb ret (0,0,0);
+		ret.m_rgb = (~m_rgb) & 0x00ffffff;
+		return ret;
 	}
 
 	operator u_int32_t () const 
@@ -265,6 +273,14 @@ public:
 	virtual void drawImage(const Point& dstPos, const Image* srcImg, const Rect& srcRect, bool negative) = 0;
 
 	virtual void invalidate() = 0;
+
+	virtual void setBGColor(const rgb& color) = 0;
+
+	virtual const rgb& getBGColor() = 0;
+
+	virtual void setColor(const rgb& color) = 0;
+
+	virtual const rgb& getColor() = 0;
 };
 
 
@@ -305,15 +321,13 @@ public:
 	inline BasicButton(
 			IGraphics* gc, 
 			const Rect& visual, 
-			const Rect& active, 
-			const rgb& color, 
-			const rgb& activeColor
+			const Rect& active 
 			)
 		: m_gc(gc)
 		, m_visualRect(visual)
 		, m_activeRect(active)
-		, m_color(color)
-		, m_activeColor(activeColor)
+		, m_color(gc->getColor())
+		, m_activeColor( m_color.negative() )
 	{
 	}
 	
@@ -383,6 +397,21 @@ public:
 		return stub;
 	}
 
+	const bool getRect(int id, Rect& outRect) const
+	{
+		bool ret = false;
+
+		std::map<int, Rect>::const_iterator pos = m_rects.find(id);
+		
+		if ( pos != m_rects.end() ) 
+		{
+			outRect = pos->second;
+			ret = true;
+		}
+
+		return ret;
+	}
+	
 	Image* getImage() const
 	{
 		return m_image;
@@ -405,13 +434,11 @@ public:
 			IGraphics* gc, 
 			const Rect& visual, 
 			const Rect& active, 
-			const rgb& color, 
-			const rgb& activeColor,
 			const Point& imgBasePoint,
 			Image* srcImg, 
 			const Rect& srcImgRect
 			)
-		: BasicButton(gc, visual, active, color, activeColor)
+		: BasicButton(gc, visual, active)
 		, m_activeImage(0)
 		, m_dstImagePointsVect( 1 ) // sz
 		, m_srcImagesVect ( 1 ) // sz
@@ -430,13 +457,11 @@ public:
 			IGraphics* gc, 
 			const Rect& visual, 
 			const Rect& active, 
-			const rgb& color, 
-			const rgb& activeColor,
 			const Point& imgBasePoint,
 			ImageRscSet* rscSet, 
 			int imgResId
 			)
-		: BasicButton(gc, visual, active, color, activeColor)
+		: BasicButton(gc, visual, active)
 		, m_activeImage(0)
 		, m_dstImagePointsVect( 1 ) // sz
 		, m_srcImagesVect ( 1 ) // sz
@@ -456,14 +481,12 @@ public:
 			IGraphics* gc, 
 			const Rect& visual, 
 			const Rect& active, 
-			const rgb& color, 
-			const rgb& activeColor,
 			const Point& imgBasePoint,
 			ImageRscSet* rscSet, 
 			int imgResId0,
 			int imgResId1
 			)
-		: BasicButton(gc, visual, active, color, activeColor)
+		: BasicButton(gc, visual, active)
 		, m_activeImage(0)
 		, m_dstImagePointsVect( 2 ) // sz
 		, m_srcImagesVect ( 2 ) // sz
@@ -492,13 +515,11 @@ public:
 			IGraphics* gc, 
 			const Rect& visual, 
 			const Rect& active, 
-			const rgb& color, 
-			const rgb& activeColor,
 			const std::vector<Point>& imgBasePoints,
 			ImageRscSet* rscSet, 
 			std::vector<int>& imgResIds
 			)
-		: BasicButton(gc, visual, active, color, activeColor)
+		: BasicButton(gc, visual, active)
 		, m_activeImage(0)
 		, m_dstImagePointsVect( imgResIds.size() ) // sz
 		, m_srcImagesVect ( imgResIds.size() ) // sz
@@ -538,6 +559,175 @@ public:
 					invertColor 
 				);
 		}
+	}
+};
+
+
+
+class TextEdit : public IWidget
+{
+	rgb m_color;
+	
+	IGraphics* m_gc;
+
+	Point m_imgDrawOffset;
+
+	ImageRscSet *m_fontDb;
+
+	Rect m_rect;
+
+	Size m_letterSize;
+
+	int m_maxSize;
+
+	std::string m_string;
+	std::string m_displayString;
+
+	bool m_password;
+
+protected:
+	inline IGraphics* gc() const
+	{
+		return m_gc;
+	}
+
+	const Rect& rect() const 
+	{
+		return m_rect;
+	}
+
+public:
+	inline TextEdit( IGraphics* gc, Rect rect, Size ltrSize, Point offs, ImageRscSet* font, bool password)
+		: m_color ( gc->getColor() ) 
+		, m_gc ( gc )
+		, m_rect ( rect )
+		, m_letterSize ( ltrSize )
+		, m_imgDrawOffset ( offs )
+		, m_fontDb ( font )
+		, m_password ( password )
+	{
+		m_maxSize =  m_rect.getSize().getWidth() / m_letterSize.getWidth();
+	}
+
+	inline void setString(const std::string& str)
+	{
+		m_string = str;
+
+		if ( m_password ) 
+		{
+			m_displayString.clear();
+			
+			for (int i=0; i<m_string.size(); i++)
+			{
+				m_displayString += '*';
+			}
+		}
+	}
+
+	inline void appendChar(char c)
+	{
+		m_string += c;
+
+		if ( m_password ) 
+		{
+			if ( m_displayString.size() )
+			{
+				m_displayString.erase(m_displayString.size()-1);
+				m_displayString += '*';
+			}
+			m_displayString += c;
+		}
+
+		m_gc->invalidate();
+	}
+
+	inline void backspace()
+	{
+		if ( m_string.size() ) 
+		{
+			m_string.erase(m_string.size()-1);
+
+			if ( m_password  && m_displayString.size() ) 
+			{
+				m_displayString.erase(m_displayString.size()-1);
+			}
+		}
+	}
+
+	inline void hideLastChr()
+	{
+		if ( m_displayString.size())
+		{
+			m_displayString.erase(m_displayString.size()-1);
+			m_displayString += '*';
+		}
+	}
+
+	bool hitTest(const Point& pt)
+	{
+		return m_rect.inside(pt); 
+	}
+
+	void onTouchDown(const Point& pt)
+	{
+	}
+
+	void onTouchUp(const Point& pt)
+	{
+	}
+	
+	void onTouchUpdate(const Point& pt)
+	{
+	}
+
+	void draw()
+	{
+		std::string substrToDisplay;
+
+		size_t len = m_password ? m_displayString.size() : m_string.size();
+
+		substrToDisplay = m_password ? m_displayString : m_string;
+		
+		if ( len >= m_maxSize )
+		{
+			substrToDisplay = substrToDisplay.substr(len - m_maxSize, m_maxSize);
+		}
+
+		m_gc->fill(m_rect, m_color);
+
+		Point drawPos ( 
+				m_rect.getOrigin().getX() + m_imgDrawOffset.getX(), 
+				m_rect.getOrigin().getY() + m_imgDrawOffset.getY() 
+			);
+
+		Image *srcImg = m_fontDb->getImage();
+
+		for (int i=0; i<substrToDisplay.size(); i++)
+		{
+			Rect srcRect;
+
+			int chr = substrToDisplay[i];
+
+			if ( m_fontDb->getRect(chr, srcRect ) )
+			{
+				m_gc->drawImage(
+					drawPos, 
+					srcImg, 
+					srcRect, 
+					false 
+				);
+			}
+
+			drawPos.setX(
+				drawPos.getX() + m_letterSize.getWidth() 
+			);
+			
+		}
+	}
+
+	const std::string& getString() const
+	{
+		return m_string;
 	}
 };
 

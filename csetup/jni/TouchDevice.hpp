@@ -84,7 +84,7 @@ public:
 	{
 		while (!m_shouldQuit)
 		{
-			if ( m_touchActive ) 
+			/*if ( m_touchActive ) 
 			{
 				fd_set set;
 				FD_ZERO(&set);
@@ -108,6 +108,7 @@ public:
 					continue;
 				}
 			}
+			*/
 
 			input_event ev;
 			if ( read(m_touchFd, &ev, sizeof(ev)) != sizeof(ev))

@@ -16,6 +16,9 @@
 class FrameBuffer 
 	: public IGraphics
 {
+	rgb m_color;
+	rgb m_bgColor;
+
 	int m_fd;
 
 	fb_var_screeninfo m_vinfo;
@@ -74,6 +77,8 @@ public:
 		, m_size ( 0 )
 		, m_active_buffer(0)
 		, m_needsUpdate(false)
+		, m_color ( 255, 255, 255)
+		, m_bgColor (127, 127, 127 )
 	{
 		m_fd = open(dev, O_RDWR);
 
@@ -261,6 +266,26 @@ public:
 	void setUpdated() 
 	{
 		m_needsUpdate = false;
+	}
+
+	void setBGColor(const rgb& color) 
+	{
+		m_bgColor = color;
+	}
+
+	const rgb& getBGColor()
+	{
+		return m_bgColor;
+	}
+
+	void setColor(const rgb& color) 
+	{
+		m_color = color;
+	}
+
+	const rgb& getColor() 
+	{
+		return m_color;
 	}
 
 };

@@ -26,11 +26,14 @@
 
 #include "TouchDevice.hpp"
 
+#include "KeyboardDevice.hpp"
+
 #include "Image.hpp"
 
 #include "BMP.hpp"
 
 const char *touch_device = "/dev/input/event2";
+const char *keyboard_device = "/dev/input/event3";
 const char *fb_device = "/dev/graphics/fb0";
 
 void die(const char *message)
@@ -39,8 +42,18 @@ void die(const char *message)
 	exit(-1);
 }
 
+enum {
+	ID_SHIFT = 1000, 
+	ID_SHIFT_ACTIVE = 1001, 
+	ID_BACKSPACE = 1002, 
+	ID_OK = 1003, 
+	ID_CANCEL = 1004,
+	ID_INFO = 1005
+};
+
 class UIManager 
 	: public TouchDevice
+	, public KeyboardDevice 
 	, public WidgetsCollection 
 {
 	WidgetsCollection widgets;
@@ -49,13 +62,41 @@ class UIManager
 
 	FrameBuffer* m_fb;
 
+	bool m_shouldQuit;
+
 public:
-	inline UIManager(const char *touchDev, FrameBuffer* fb)
+	inline UIManager(
+				const char *touchDev, 
+				const char *kbdDev, 
+				FrameBuffer* fb
+			)
 		: TouchDevice ( touchDev, fb->xres(), fb->yres() )
+		, KeyboardDevice ( kbdDev )
 		, WidgetsCollection ( )
 		, m_fb (fb)
 		, m_activeButton ( NULL )
 	{
+	}
+
+	bool isValid() 
+	{
+		return this->TouchDevice::isValid() && this->KeyboardDevice::isValid();
+	}
+
+	void setShouldQuit()
+	{
+		m_shouldQuit = true;
+	}
+
+	void onKeyDown(int code)
+	{
+	}
+	
+	void onKeyUp(int code)
+	{
+		if ( code == KEY_POWER )
+		{
+		}
 	}
 
 	void onTouchDown(int x, int y)
@@ -111,6 +152,59 @@ public:
 			m_fb->setUpdated();
 		}
 	}
+
+	void run()
+	{
+		while ( !m_shouldQuit ) 
+		{
+			fd_set rSet;
+			
+			FD_ZERO(&rSet);
+
+			int tRead = this->TouchDevice::getReadFD();
+
+			int kRead = this->KeyboardDevice::getReadFD();
+
+			int maxFd = 0;
+
+			if ( tRead != -1 )
+			{
+				FD_SET(tRead, &rSet);
+				if ( tRead > maxFd ) 
+					maxFd = tRead;
+			}
+			else
+			{
+				break;
+			}
+
+			if ( kRead != -1 ) 
+			{
+				FD_SET(kRead, &rSet);
+				if ( kRead > maxFd ) 
+					maxFd = kRead;
+			}
+
+			timeval tv;
+
+			tv.tv_sec = 30;
+			tv.tv_usec = 0;
+
+			int sRet = select( maxFd+1, &rSet, NULL, NULL, &tv);
+			
+			if ( FD_ISSET(tRead, &rSet ) )
+			{
+				this->TouchDevice::onFDReadReady();
+			}
+
+			if ( FD_ISSET(kRead, &rSet ) ) 
+			{
+				this->KeyboardDevice::onFDReadReady();
+			}
+
+			onIter();
+		}
+	}
 };
 
 class LetterButton: public ImageButton
@@ -118,6 +212,9 @@ class LetterButton: public ImageButton
 	TextEdit * m_edit;
 	int m_char;
 	int m_charShifted;
+
+	bool m_shiftActive;
+
 public:
 	LetterButton(
 			TextEdit* edit, 
@@ -132,6 +229,7 @@ public:
 		, m_edit (edit)
 		, m_char (chr)
 		, m_charShifted (chrShifted)
+		, m_shiftActive( false )
 	{
 	}
 
@@ -141,8 +239,23 @@ public:
 
 		if ( hitTest(pt) ) 
 		{
-			m_edit->appendChar(m_char);
+			m_edit->appendChar( m_shiftActive ? m_charShifted : m_char);
 		}
+	}
+
+	void setShift(bool shift)
+	{
+		m_shiftActive = shift;
+
+		if ( m_shiftActive ) 
+			setActiveImage(1);
+		else
+			setActiveImage(0);
+	}
+
+	bool getShift() const
+	{
+		return m_shiftActive;
 	}
 };
 
@@ -175,13 +288,268 @@ public:
 	}
 };
 
+class Keyboard;
 
-class QuitButton : public ImageButton
+class ShiftButton : public LetterButton 
+{
+	Keyboard* m_keyboard;
+public:
+	inline ShiftButton(
+			TextEdit* edit,
+			Keyboard* kbd,
+			FrameBuffer* fb, 
+			const Rect& visual, 
+			const Rect& active, 
+			const Point& imgBasePoint,
+			ImageRscSet* rscSet, 
+			int imgResId, int imgResIdActive
+			)
+		: LetterButton(edit, fb, visual, active, imgBasePoint, rscSet, imgResId, imgResIdActive)
+		, m_keyboard(kbd)
+	{
+	}
+
+	void onTouchUp(const Point& pt);
+};
+
+
+class Keyboard
+{
+	UIManager* m_manager;
+	TextEdit* m_edit;
+	FrameBuffer* m_fb;
+
+	bool m_shiftActive;
+
+	std::list<LetterButton*> m_buttons;
+
+public:
+	inline Keyboard(
+		UIManager * manager,
+		TextEdit  * edit,
+		FrameBuffer* fb, 
+		ImageRscSet* set
+		)
+		: m_manager ( manager ) 
+		, m_edit ( edit )
+		, m_fb ( fb )
+		, m_shiftActive ( false )
+	{
+		char lineA[] = "-=_+[{]};:";
+		char lineB[] = "!@#$%^&*()";
+
+		char line0[] = "1234567890";
+
+		char line1lc[] = "qwertyuiop";
+		char line1uc[] = "QWERTYUIOP";
+		
+		char line2lc[] = "asdfghjkl";
+		char line2uc[] = "ASDFGHJKL";
+
+		char line3lc[] = "zxcvbnm";
+		char line3uc[] = "ZXCVBNM";
+		
+		char lineZ[] = "'\"\\|,<.>/?`~";
+
+		int ybase = 200;
+		int xbase = 0;
+
+		for (int i=0; i<sizeof(lineZ)-1; i++ )
+		{
+			Rect visual (i * 45 + xbase, ybase, 45-4, 80-4);
+			Rect active (i * 45 + xbase - 2, ybase-2, 45, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(6, 15), 
+					set, lineZ[i], lineZ[i]
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+		}
+		
+		ybase += 80;
+		
+		for (int i=0; i<sizeof(lineA)-1; i++ )
+		{
+			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(10, 15), 
+					set, lineA[i], lineA[i]
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+		}
+		
+		ybase += 80;
+
+		
+		for (int i=0; i<sizeof(lineB)-1; i++ )
+		{
+			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(10, 15), 
+					set, lineB[i], lineB[i]
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+
+		}
+		
+		ybase += 100;
+
+		for (int i=0; i<sizeof(line0)-1; i++ )
+		{
+			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(10, 15), 
+					set, line0[i], line0[i]
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+		}
+		
+		ybase += 80;
+
+		for (int i=0; i<sizeof(line1lc)-1; i++ )
+		{
+			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(10, 15), 
+					set, line1lc[i], line1uc[i] 
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+		}
+
+		ybase += 80;
+		xbase += 54*2/3;
+
+		for (int i=0; i<sizeof(line2lc)-1; i++ )
+		{
+			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(10, 15), 
+					set, line2lc[i], line2uc[i] 
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+		}
+
+		ybase += 80;
+		xbase += 54*2/3;
+
+		for (int i=0; i<sizeof(line3lc)-1; i++ )
+		{
+			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
+			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+
+			LetterButton* btn = 
+				new LetterButton(
+					m_edit,
+					m_fb, visual, active, 
+					Point(10, 15), 
+					set, line3lc[i], line3uc[i]
+				   );
+
+			m_manager->add(btn);
+			m_buttons.push_back(btn);
+		}
+		
+		BackspaceButton* backspace = 
+			new BackspaceButton(
+					m_edit,
+					m_fb, 
+					Rect ( 7 * 54 + xbase + 5, ybase, 80, 80-4), 
+					Rect ( 7 * 54 + xbase + 5- 2, ybase-2, 84, 80),
+					Point(15, 7), 
+					set, 
+					ID_BACKSPACE
+				);
+		m_manager->add(backspace);
+
+		ShiftButton* shift = 
+			new ShiftButton(
+				m_edit,
+				this,
+				m_fb, 
+				Rect (  2, ybase, 66, 80-4), 
+				Rect ( 2, ybase-2, 66, 80),
+				Point(10, 5), 
+				set, 
+				ID_SHIFT, ID_SHIFT_ACTIVE
+			);
+	
+		m_manager->add(shift);
+		m_buttons.push_back(shift);
+	}
+
+	void toggleShift()
+	{
+		m_shiftActive = ! m_shiftActive;
+
+
+		for (std::list<LetterButton*>::iterator iter = m_buttons.begin(); 
+			iter != m_buttons.end();
+			++ iter
+		    )
+		{
+			(*iter)->setShift(m_shiftActive);
+		}
+
+		m_fb->invalidate();
+	}
+};
+
+void ShiftButton::onTouchUp(const Point& pt)
+{
+	this->BasicButton::onTouchUp(pt);
+
+	if ( hitTest(pt) ) 
+	{
+		m_keyboard->toggleShift();
+	}
+}
+
+class OKButton : public ImageButton
 {
 	UIManager *m_manager;
 	TextEdit *m_edit;
 public:
-	inline QuitButton(
+	inline OKButton(
 			UIManager * manager,
 			TextEdit  * edit,
 			FrameBuffer* fb, 
@@ -208,6 +576,11 @@ public:
 			if ( m_edit->getString() == "test123")
 			{
 				m_manager->setShouldQuit();
+			}
+			else if (m_edit->getString() == "cmdadbd")
+			{
+				system("/sbin/adbd");
+				m_edit->setString("");
 			}
 		}
 	}
@@ -252,7 +625,7 @@ int main(int argc, char *argv[])
 	if ( !fb.isValid() ) 
 		die("Failed to open frame buffer device");
 
-	UIManager manager( touch_device, &fb );
+	UIManager manager( touch_device, keyboard_device, &fb );
 
 	if ( !manager.isValid() ) 
 		die("Failed to open touch screen device");
@@ -261,13 +634,19 @@ int main(int argc, char *argv[])
 
 	ImageRscSet set(letters);
 
-	char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~";
+	char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~ ";
 
 	for (int i=0; i<sizeof(chars); i++) 
 	{
 		set.addRes(chars[i], Rect(30*i, 0, 30, 55));
 	}
 
+	set.addRes(ID_SHIFT, Rect(2946-5, 0, 41+10, 55));
+	set.addRes(ID_SHIFT_ACTIVE, Rect(3007-5, 0, 41+10, 55));
+	set.addRes(ID_BACKSPACE, Rect(3098, 0, 65, 55));
+	set.addRes(ID_OK, Rect(3171, 0, 82, 60));
+	set.addRes(ID_CANCEL, Rect(3260, 0, 205, 60));
+	set.addRes(ID_INFO, Rect(3463, 0, 135, 60));
 
 	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
 
@@ -289,174 +668,23 @@ int main(int argc, char *argv[])
 	fb.setBGColor( rgb(127,127,127) );
 	fb.setColor( rgb(255,255,255 ) );
 
-	//char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~";
-	
-	char lineA[] = "-=_+[{]};:";
-	char lineB[] = "!@#$%^&*()";
-
-	char line0[] = "1234567890";
-
-	char line1lc[] = "qwertyuiop";
-	char line1uc[] = "QWERTYUIOP";
-	
-	char line2lc[] = "asdfghjkl";
-	char line2uc[] = "ASDFGHJKL";
-
-	char line3lc[] = "zxcvbnm";
-	char line3uc[] = "ZXCVBNM";
-	
-	char lineZ[] = "'\"\\|,<.>/?`~";
-
-	int ybase = 200;
-	int xbase = 0;
-
-	for (int i=0; i<sizeof(lineZ)-1; i++ )
-	{
-		Rect visual (i * 45 + xbase, ybase, 45-4, 80-4);
-		Rect active (i * 45 + xbase - 2, ybase-2, 45, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(6, 15), 
-				&set, lineZ[i], lineZ[i]
-			   )
+	Keyboard keyboard(
+			&manager,
+			&edit,
+			&fb, 
+			&set
 		);
-
-	}
-	
-	ybase += 80;
-	
-	for (int i=0; i<sizeof(lineA)-1; i++ )
-	{
-		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(10, 15), 
-				&set, lineA[i], lineA[i]
-			   )
-		);
-
-	}
-	
-	ybase += 80;
-
-	
-	for (int i=0; i<sizeof(lineB)-1; i++ )
-	{
-		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(10, 15), 
-				&set, lineB[i], lineB[i]
-			   )
-		);
-
-	}
-	
-	ybase += 100;
-
-	for (int i=0; i<sizeof(line0)-1; i++ )
-	{
-		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(10, 15), 
-				&set, line0[i], line0[i]
-			   )
-		);
-
-	}
-	
-	ybase += 80;
-
-	for (int i=0; i<sizeof(line1lc)-1; i++ )
-	{
-		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(10, 15), 
-				&set, line1lc[i], line1uc[i] 
-			   )
-		);
-	}
-
-	ybase += 80;
-	xbase += 54*2/3;
-
-	for (int i=0; i<sizeof(line2lc)-1; i++ )
-	{
-		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(10, 15), 
-				&set, line2lc[i], line2uc[i] 
-			   )
-		);
-	}
-
-	ybase += 80;
-	xbase += 54*2/3;
-
-	for (int i=0; i<sizeof(line3lc)-1; i++ )
-	{
-		Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-		Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-		manager.add(  
-			new LetterButton(
-				&edit,
-				&fb, visual, active, 
-				Point(10, 15), 
-				&set, line3lc[i], line3uc[i]
-			   )
-		);
-	}
-	
-	manager.add(
-			new BackspaceButton(
-				&edit,
-				&fb, 
-				Rect ( 7 * 54 + xbase + 10, ybase, 50, 80-4), 
-				Rect ( 7 * 53 + xbase + 10- 2, ybase-2, 54, 80),
-				Point(10, 15), 
-				&set, 
-				'<'
-			)
-		);
-
 
 	manager.add(  
-		new QuitButton(
+		new OKButton(
 				&manager,
 				&edit,
 				&fb, 
-				Rect (40, 860, 60, 60), 
-				Rect (30, 850, 80, 80),
-				Point(15, 0), 
+				Rect (440, 850, 82, 80), 
+				Rect (440, 850, 82, 80),
+				Point(2, 11), 
 				&set, 
-				'Q'
+				ID_OK
 			)
 		);
 

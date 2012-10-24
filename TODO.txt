@@ -1,0 +1,20 @@
+Add 'Emergency' button
+
+Add more advanced keyboard handling
+
+add buttons borders
+
+add poweroff button 
+
+add the main functionality finally!!
+
+add the 'password under the pressure'
+
+add the info button with the info page
+
+add more handy cmds
+
+add the creation / formatting option
+
+add the nicer look, more advanced UI library code, etc.
+

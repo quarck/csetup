@@ -1,9 +1,3 @@
-Add 'Emergency' button
-
-Add more advanced keyboard handling
-
-add buttons borders
-
 add poweroff button 
 
 add the main functionality finally!!

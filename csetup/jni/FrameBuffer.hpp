@@ -18,6 +18,7 @@ class FrameBuffer
 {
 	rgb m_color;
 	rgb m_bgColor;
+	rgb m_borderColor;
 
 	int m_fd;
 
@@ -79,6 +80,7 @@ public:
 		, m_needsUpdate(false)
 		, m_color ( 255, 255, 255)
 		, m_bgColor (127, 127, 127 )
+		, m_borderColor ( 0, 0, 12 )
 	{
 		m_fd = open(dev, O_RDWR);
 
@@ -93,6 +95,11 @@ public:
 
 				// Figure out the size of the screen in bytes
 				m_size = m_vinfo.xres_virtual * m_vinfo.yres_virtual * m_bytes_per_pixel;
+
+				printf("xres=%d,yres=%d,vxres=%d,vyres=%d, m_size=%d, bytes_per_line=%d\n", 
+					m_vinfo.xres, m_vinfo.yres, 
+					m_vinfo.xres_virtual, m_vinfo.yres_virtual, 
+					m_size, m_bytes_per_line);
 
 				m_max_buffers = m_vinfo.yres_virtual / m_vinfo.yres;
 
@@ -149,16 +156,57 @@ public:
 	void fill(const rgb& clr)
 	{
 		u_int32_t *wptr = (u_int32_t*)(m_fb + offsetForPosition(0, 0, m_active_buffer));
-
+		
 		for ( int y = 0; y < m_vinfo.yres; y ++ )
 		{
-			for ( int x = 0; x < m_vinfo.xres; x ++ )
+			for ( int x = 0; x < m_vinfo.xres_virtual; x ++ )
 			{
 				*wptr++ = clr;
 			}
 		}
 	}
 
+
+	void hline(int x1, int x2, int y, const rgb& clr)
+	{
+		u_int32_t *wptr = 
+			(u_int32_t*)(
+				m_fb 
+				+ 
+				offsetForPosition( x1, y, m_active_buffer )
+			);
+
+		for ( int x = x1; x < x2; x ++ )
+		{
+			*wptr++ = clr;
+		}
+
+	}
+
+	void vline(int x, int y1, int y2, const rgb& clr)
+	{
+		u_int32_t *wptr = 
+			(u_int32_t*)(
+				m_fb 
+				+ 
+				offsetForPosition( x, y1, m_active_buffer )
+			);
+
+		ptrdiff_t dist = 
+			(u_int32_t*)(
+				m_fb 
+				+ 
+				offsetForPosition( x, y1+1, m_active_buffer )
+			)
+			- 
+			wptr;
+
+		for (int y = y1; y < y2; y++)
+		{
+			*wptr = clr;
+			wptr += dist;
+		}
+	}
 
 	void fill(const Rect& area, const rgb& clr)
 	{
@@ -286,6 +334,16 @@ public:
 	const rgb& getColor() 
 	{
 		return m_color;
+	}
+
+	void setBorderColor(const rgb& color) 
+	{
+		m_borderColor = color;
+	}
+
+	const rgb& getBorderColor() 
+	{
+		return m_borderColor;
 	}
 
 };

@@ -183,7 +183,20 @@ public:
 class IWidget
 {
 public:
+	//
+	// Tests that given point belongs to this object
+	// 
 	virtual bool hitTest(const Point& pt) = 0;
+
+	//
+	// Tests that given point located near the current object, 
+	// most commonly to be used with touch up / btn up handlers, 
+	// as they might threat event as 'to proceed' not only 
+	// if the up event occurs withing the bounding rectangle, 
+	// but also if its located not very far from it -- it is more handy  
+	// in most cases 
+	//
+	virtual bool weakHitTest(const Point& pt) = 0;
 
 	//
 	// Activates when touch is just happened 
@@ -249,6 +262,24 @@ public:
 
 		return ret;
 	}
+	
+	bool weakHitTest(const Point& pt)
+	{
+		IWidget* ret = NULL;
+
+		for (  std::list<IWidget*>::const_iterator iter = m_listWidgets.begin();
+			iter != m_listWidgets.end();
+			++iter)
+		{
+			if ( (*iter)->weakHitTest(pt))
+			{
+				ret = *iter;
+				break;
+			}
+		}
+
+		return ret;
+	}
 
 	void draw() const
 	{
@@ -270,6 +301,10 @@ public:
 	
 	virtual void fill(const Rect& area, const rgb& p) = 0;
 
+	virtual void hline(int x1, int x2, int y, const rgb& clr) = 0;
+	
+	virtual void vline(int x, int y1, int y2, const rgb& clr) = 0;
+
 	virtual void drawImage(const Point& dstPos, const Image* srcImg, const Rect& srcRect, bool negative) = 0;
 
 	virtual void invalidate() = 0;
@@ -281,6 +316,10 @@ public:
 	virtual void setColor(const rgb& color) = 0;
 
 	virtual const rgb& getColor() = 0;
+
+	virtual void setBorderColor(const rgb& color) = 0;
+
+	virtual const rgb& getBorderColor() = 0;
 };
 
 
@@ -348,6 +387,18 @@ public:
 		return m_activeRect.inside(pt);
 	}
 	
+	bool weakHitTest(const Point& pt)
+	{
+		int w = m_activeRect.getSize().getWidth();
+		int h = m_activeRect.getSize().getHeight();
+		int x = m_activeRect.getOrigin().getX();
+		int y = m_activeRect.getOrigin().getY();
+
+		Rect widerRect (x-w/2, y-h/2, w*2, h*2);
+
+		return widerRect.inside(pt);
+	}
+
 	void onTouchDown(const Point& pt)
 	{
 		m_gc->invalidate();
@@ -558,6 +609,24 @@ public:
 					m_srcImageRectsVect[m_activeImage], 
 					invertColor 
 				);
+
+			const Rect& visual = visualRect();
+
+			int x1 = visual.getOrigin().getX();
+			int x2 = visual.getOrigin().getX() + visual.getSize().getWidth(); 
+			int y1 = visual.getOrigin().getY(); 
+			int y2 = visual.getOrigin().getY() + visual.getSize().getHeight();
+
+			const rgb& clr = gc()->getBorderColor();
+
+			gc()->hline(x1, x2, y1, clr );
+			gc()->hline(x1, x2, y1+1, clr );
+			gc()->hline(x1, x2, y2-1, clr );
+			gc()->hline(x1, x2, y2-2, clr );
+			gc()->vline(x1, y1, y2, clr );
+			gc()->vline(x1+1, y1, y2, clr );
+			gc()->vline(x2-1, y1, y2, clr );
+			gc()->vline(x2-2, y1, y2, clr );
 		}
 	}
 };
@@ -668,6 +737,18 @@ public:
 		return m_rect.inside(pt); 
 	}
 
+	bool weakHitTest(const Point& pt)
+	{
+		int w = m_rect.getSize().getWidth();
+		int h = m_rect.getSize().getHeight();
+		int x = m_rect.getOrigin().getX();
+		int y = m_rect.getOrigin().getY();
+
+		Rect widerRect (x-w/2, y-h/2, w*2, h*2);
+
+		return widerRect.inside(pt);
+	}
+
 	void onTouchDown(const Point& pt)
 	{
 	}
@@ -723,6 +804,25 @@ public:
 			);
 			
 		}
+
+		const Rect& visual = m_rect;
+
+		int x1 = visual.getOrigin().getX();
+		int x2 = visual.getOrigin().getX() + visual.getSize().getWidth(); 
+		int y1 = visual.getOrigin().getY(); 
+		int y2 = visual.getOrigin().getY() + visual.getSize().getHeight();
+
+		const rgb& clr = gc()->getBorderColor();
+
+		gc()->hline(x1, x2, y1, clr );
+		gc()->hline(x1, x2, y1+1, clr );
+		gc()->hline(x1, x2, y2-1, clr );
+		gc()->hline(x1, x2, y2-2, clr );
+		gc()->vline(x1, y1, y2, clr );
+		gc()->vline(x1+1, y1, y2, clr );
+		gc()->vline(x2-1, y1, y2, clr );
+		gc()->vline(x2-2, y1, y2, clr );
+
 	}
 
 	const std::string& getString() const

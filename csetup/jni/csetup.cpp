@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <sys/time.h>
+
 #include <sys/mman.h>
 
 #include <linux/fb.h>
@@ -48,7 +50,8 @@ enum {
 	ID_BACKSPACE = 1002, 
 	ID_OK = 1003, 
 	ID_CANCEL = 1004,
-	ID_INFO = 1005
+	ID_INFO = 1005, 
+	ID_EMERGENCY = 1006
 };
 
 class UIManager 
@@ -64,6 +67,8 @@ class UIManager
 
 	bool m_shouldQuit;
 
+	time_t m_timePowerBtnDown;
+
 public:
 	inline UIManager(
 				const char *touchDev, 
@@ -75,6 +80,7 @@ public:
 		, WidgetsCollection ( )
 		, m_fb (fb)
 		, m_activeButton ( NULL )
+		, m_timePowerBtnDown(0)
 	{
 	}
 
@@ -96,6 +102,7 @@ public:
 	{
 		if ( code == KEY_POWER )
 		{
+			system("/system/bin/shutdown -h now");
 		}
 	}
 
@@ -237,7 +244,7 @@ public:
 	{
 		this->BasicButton::onTouchUp(pt);
 
-		if ( hitTest(pt) ) 
+		if ( weakHitTest(pt) ) 
 		{
 			m_edit->appendChar( m_shiftActive ? m_charShifted : m_char);
 		}
@@ -281,7 +288,7 @@ public:
 	{
 		this->BasicButton::onTouchUp(pt);
 
-		if ( hitTest(pt) ) 
+		if ( weakHitTest(pt) ) 
 		{
 			m_edit->backspace();
 		}
@@ -351,7 +358,7 @@ public:
 		
 		char lineZ[] = "'\"\\|,<.>/?`~";
 
-		int ybase = 200;
+		int ybase = 145;
 		int xbase = 0;
 
 		for (int i=0; i<sizeof(lineZ)-1; i++ )
@@ -411,7 +418,7 @@ public:
 
 		}
 		
-		ybase += 100;
+		ybase += 110;
 
 		for (int i=0; i<sizeof(line0)-1; i++ )
 		{
@@ -430,7 +437,7 @@ public:
 			m_buttons.push_back(btn);
 		}
 		
-		ybase += 80;
+		ybase += 90;
 
 		for (int i=0; i<sizeof(line1lc)-1; i++ )
 		{
@@ -538,18 +545,20 @@ void ShiftButton::onTouchUp(const Point& pt)
 {
 	this->BasicButton::onTouchUp(pt);
 
-	if ( hitTest(pt) ) 
+	if ( weakHitTest(pt) ) 
 	{
 		m_keyboard->toggleShift();
 	}
 }
 
-class OKButton : public ImageButton
+class ActionButton : public ImageButton
 {
 	UIManager *m_manager;
 	TextEdit *m_edit;
+	int 	m_id;
+
 public:
-	inline OKButton(
+	inline ActionButton(
 			UIManager * manager,
 			TextEdit  * edit,
 			FrameBuffer* fb, 
@@ -562,6 +571,7 @@ public:
 		: ImageButton(fb, visual, active, imgBasePoint, rscSet, imgResId)
 		, m_manager ( manager )
 		, m_edit ( edit )
+		, m_id ( imgResId )
 	{
 	}
 
@@ -569,18 +579,43 @@ public:
 	{
 		this->BasicButton::onTouchUp(pt);
 
-		if ( hitTest(pt) ) 
-		{
-			m_edit->hideLastChr();
+		m_edit->hideLastChr();
 
-			if ( m_edit->getString() == "test123")
+		if ( weakHitTest(pt) ) 
+		{
+			if ( m_id == ID_OK ) 
+			{
+				const std::string& str = m_edit->getString();
+
+				// N.I.
+				if ( str == "sdboot" || str == "bootsd" )
+				{
+					system("/system/bin/mount -t vfat /dev/block/mmcblk1p1 /mnt/sdcard");
+
+					system("/system/xbin/mknod /dev/loop0 b 7 0");
+					system("/system/xbin/mknod /dev/loop1 b 7 1"); 
+
+					system("/system/xbin/losetup /dev/loop0 /mnt/sdcard/data.img"); 
+					system("/system/xbin/losetup /dev/loop1 /mnt/sdcard/cache.img");
+
+					system("/system/bin/mount -t ext4 /dev/loop0 /data");
+					system("/system/bin/mount -t ext4 /dev/loop1 /cache");
+
+					m_manager->setShouldQuit();
+				}
+				else if ( str == "cmdadbd" || str == "cmdadb" )
+				{
+					system("/sbin/adbd");
+					m_edit->setString("");
+				}
+			}
+			else if ( m_id == ID_EMERGENCY )
 			{
 				m_manager->setShouldQuit();
 			}
-			else if (m_edit->getString() == "cmdadbd")
+			else if ( m_id == ID_INFO ) 
 			{
-				system("/sbin/adbd");
-				m_edit->setString("");
+				// N.I.
 			}
 		}
 	}
@@ -611,7 +646,7 @@ public:
 	{
 		this->BasicButton::onTouchUp(pt);
 
-		if ( hitTest(pt) ) 
+		if ( weakHitTest(pt) ) 
 		{
 			m_edit->setString("");
 		}
@@ -647,6 +682,7 @@ int main(int argc, char *argv[])
 	set.addRes(ID_OK, Rect(3171, 0, 82, 60));
 	set.addRes(ID_CANCEL, Rect(3260, 0, 205, 60));
 	set.addRes(ID_INFO, Rect(3463, 0, 135, 60));
+	set.addRes(ID_EMERGENCY, Rect(3602, 0, 318, 60));
 
 	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
 
@@ -665,7 +701,7 @@ int main(int argc, char *argv[])
 
 	manager.add(&clearBtn);
 
-	fb.setBGColor( rgb(127,127,127) );
+	fb.setBGColor( rgb(90,90,127) );
 	fb.setColor( rgb(255,255,255 ) );
 
 	Keyboard keyboard(
@@ -676,15 +712,28 @@ int main(int argc, char *argv[])
 		);
 
 	manager.add(  
-		new OKButton(
+		new ActionButton(
 				&manager,
 				&edit,
 				&fb, 
-				Rect (440, 850, 82, 80), 
-				Rect (440, 850, 82, 80),
+				Rect (440, 850, 85, 80), 
+				Rect (440, 850, 85, 80),
 				Point(2, 11), 
 				&set, 
 				ID_OK
+			)
+		);
+
+	manager.add(  
+		new ActionButton(
+				&manager,
+				&edit,
+				&fb, 
+				Rect (100, 850, 322, 80), 
+				Rect (100, 850, 322, 80),
+				Point(2, 11), 
+				&set, 
+				ID_EMERGENCY
 			)
 		);
 

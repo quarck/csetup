@@ -10,6 +10,8 @@
 
 #include <sys/time.h>
 
+#include <sys/wait.h>
+
 #include <sys/mman.h>
 
 #include <linux/fb.h>
@@ -38,6 +40,11 @@ const char *touch_device = "/dev/input/event2";
 const char *keyboard_device = "/dev/input/event3";
 const char *fb_device = "/dev/graphics/fb0";
 
+const char *lettersbmp = "/system/csetup/letters.bmp";
+
+const char *cryptsetup = "/system/csetup/cryptsetup";
+
+
 void die(const char *message)
 {
 	printf("%s\n", message);
@@ -53,6 +60,52 @@ enum {
 	ID_INFO = 1005, 
 	ID_EMERGENCY = 1006
 };
+
+bool luksOpen(const std::string& dev, const std::string& password, const std::string& dmname)
+{
+	bool ret = false;
+
+	// popen crashes for now reason (on actually a following fprintf), 
+	// so using 'old school'
+
+	int pipes[2];
+
+	pipe(pipes);
+
+	int pid = fork();
+
+	if ( pid == 0 ) 
+	{
+		close(0); // stdin
+		close(pipes[1]);
+		dup2(pipes[0], 0); // duplicate read-end of pipe to stdin
+
+		execl( 	cryptsetup, 
+			cryptsetup, 
+			"luksOpen", 
+			dev.c_str(), 
+			dmname.c_str(), 
+			NULL
+			);
+		exit(-1);
+	}
+	else
+	{
+		write(pipes[1], password.c_str(), password.size());
+		write(pipes[1], "\n", 1);
+		close(pipes[1]); 
+
+		int st;
+		pid_t p = waitpid(pid, &st, 0);
+
+		if ( WIFEXITED(st) && WEXITSTATUS(st) == 0 )
+			ret = true;
+
+		close(pipes[0]);
+	}
+
+	return ret;
+}
 
 class UIManager 
 	: public TouchDevice
@@ -102,7 +155,7 @@ public:
 	{
 		if ( code == KEY_POWER )
 		{
-			system("/system/bin/shutdown -h now");
+//			system("/system/bin/shutdown -h now");
 		}
 	}
 
@@ -214,6 +267,8 @@ public:
 	}
 };
 
+class Keyboard;
+
 class LetterButton: public ImageButton
 {
 	TextEdit * m_edit;
@@ -222,8 +277,11 @@ class LetterButton: public ImageButton
 
 	bool m_shiftActive;
 
+	Keyboard* m_keyboard;
+
 public:
 	LetterButton(
+			Keyboard* keyboard,
 			TextEdit* edit, 
 			FrameBuffer *fb, 
 			const Rect& visual, 
@@ -233,6 +291,7 @@ public:
 			int chr, int chrShifted	
 		)
 		: ImageButton(fb, visual, active, imgBasePoint, rscSet, chr, chrShifted)
+		, m_keyboard (keyboard)
 		, m_edit (edit)
 		, m_char (chr)
 		, m_charShifted (chrShifted)
@@ -240,15 +299,7 @@ public:
 	{
 	}
 
-	void onTouchUp(const Point& pt)
-	{
-		this->BasicButton::onTouchUp(pt);
-
-		if ( weakHitTest(pt) ) 
-		{
-			m_edit->appendChar( m_shiftActive ? m_charShifted : m_char);
-		}
-	}
+	void onTouchUp(const Point& pt);
 
 	void setShift(bool shift)
 	{
@@ -295,7 +346,6 @@ public:
 	}
 };
 
-class Keyboard;
 
 class ShiftButton : public LetterButton 
 {
@@ -311,7 +361,7 @@ public:
 			ImageRscSet* rscSet, 
 			int imgResId, int imgResIdActive
 			)
-		: LetterButton(edit, fb, visual, active, imgBasePoint, rscSet, imgResId, imgResIdActive)
+		: LetterButton(kbd, edit, fb, visual, active, imgBasePoint, rscSet, imgResId, imgResIdActive)
 		, m_keyboard(kbd)
 	{
 	}
@@ -368,6 +418,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this,
 					m_edit,
 					m_fb, visual, active, 
 					Point(6, 15), 
@@ -387,6 +438,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this, 
 					m_edit,
 					m_fb, visual, active, 
 					Point(10, 15), 
@@ -407,6 +459,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this, 
 					m_edit,
 					m_fb, visual, active, 
 					Point(10, 15), 
@@ -427,6 +480,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this, 
 					m_edit,
 					m_fb, visual, active, 
 					Point(10, 15), 
@@ -446,6 +500,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this, 
 					m_edit,
 					m_fb, visual, active, 
 					Point(10, 15), 
@@ -466,6 +521,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this, 
 					m_edit,
 					m_fb, visual, active, 
 					Point(10, 15), 
@@ -486,6 +542,7 @@ public:
 
 			LetterButton* btn = 
 				new LetterButton(
+					this, 
 					m_edit,
 					m_fb, visual, active, 
 					Point(10, 15), 
@@ -524,10 +581,9 @@ public:
 		m_buttons.push_back(shift);
 	}
 
-	void toggleShift()
+	void setShift(bool shift) 
 	{
-		m_shiftActive = ! m_shiftActive;
-
+		m_shiftActive = shift;
 
 		for (std::list<LetterButton*>::iterator iter = m_buttons.begin(); 
 			iter != m_buttons.end();
@@ -539,6 +595,11 @@ public:
 
 		m_fb->invalidate();
 	}
+
+	void toggleShift()
+	{
+		setShift( ! m_shiftActive );
+	}
 };
 
 void ShiftButton::onTouchUp(const Point& pt)
@@ -548,6 +609,21 @@ void ShiftButton::onTouchUp(const Point& pt)
 	if ( weakHitTest(pt) ) 
 	{
 		m_keyboard->toggleShift();
+	}
+}
+
+void LetterButton::onTouchUp(const Point& pt)
+{
+	this->BasicButton::onTouchUp(pt);
+
+	if ( weakHitTest(pt) ) 
+	{
+		m_edit->appendChar( m_shiftActive ? m_charShifted : m_char);
+
+		if ( m_keyboard ) 
+		{
+			m_keyboard->setShift(false);
+		}
 	}
 }
 
@@ -587,35 +663,66 @@ public:
 			{
 				const std::string& str = m_edit->getString();
 
-				// N.I.
-				if ( str == "sdboot" || str == "bootsd" )
+				if ( str.size() > 6 & 
+				 	( str.substr(0,6) == "sdboot" || str.substr(0,6) == "bootsd") )
 				{
-					system("/system/bin/mount -t vfat /dev/block/mmcblk1p1 /mnt/sdcard");
+					std::string password = str.substr(6);
 
-					system("/system/xbin/mknod /dev/loop0 b 7 0");
-					system("/system/xbin/mknod /dev/loop1 b 7 1"); 
+					bool data = luksOpen("/dev/block/mmcblk1p6",  password, "data");
+					bool cache = luksOpen("/dev/block/mmcblk1p5",  password, "cache");
+					bool devlog = luksOpen("/dev/block/mmcblk1p3",  "emerg", "devlog");
 
-					system("/system/xbin/losetup /dev/loop0 /mnt/sdcard/data.img"); 
-					system("/system/xbin/losetup /dev/loop1 /mnt/sdcard/cache.img");
-
-					system("/system/bin/mount -t ext4 /dev/loop0 /data");
-					system("/system/bin/mount -t ext4 /dev/loop1 /cache");
-
-					m_manager->setShouldQuit();
+					if ( data && cache && devlog ) 
+					{
+						m_manager->setShouldQuit();
+					}
 				}
 				else if ( str == "cmdadbd" || str == "cmdadb" )
+				{
+					system("PATH='/system/bin:/system/xbin:' /sbin/adbd");
+					m_edit->setString("");
+				}
+				else if ( str == "cmdadbd2" || str == "cmdadb2" )
 				{
 					system("/sbin/adbd");
 					m_edit->setString("");
 				}
+				else
+				{
+					const std::string& password = str;
+
+					bool data = luksOpen("/dev/block/mmcblk0p23",  password, "data");
+					bool cache = luksOpen("/dev/block/mmcblk0p24",  password, "cache");
+					bool devlog = luksOpen("/dev/block/mmcblk0p28",  password, "devlog");
+
+					bool sd = luksOpen("/dev/block/mmcblk1p7", m_edit->getString(), "sd");
+					
+					if ( data && cache && devlog ) 
+					{
+						m_manager->setShouldQuit();
+					}
+				}
 			}
 			else if ( m_id == ID_EMERGENCY )
 			{
-				m_manager->setShouldQuit();
+				std::string password = "emerg";
+
+				bool data = luksOpen("/dev/block/mmcblk1p2",  password, "data");
+				bool cache = luksOpen("/dev/block/mmcblk1p1",  password, "cache");
+				bool devlog = luksOpen("/dev/block/mmcblk1p3",  password, "devlog");
+
+				if ( data && cache && devlog ) 
+				{
+					m_manager->setShouldQuit();
+				}
 			}
 			else if ( m_id == ID_INFO ) 
 			{
 				// N.I.
+			}
+			else if ( m_id == ID_CANCEL ) 
+			{
+				system("/system/bin/shutdown -h now");
 			}
 		}
 	}
@@ -665,7 +772,7 @@ int main(int argc, char *argv[])
 	if ( !manager.isValid() ) 
 		die("Failed to open touch screen device");
 
-	Image* letters = bmp::readImage("/system/csetup/letters.bmp");
+	Image* letters = bmp::readImage(lettersbmp);
 
 	ImageRscSet set(letters);
 
@@ -716,8 +823,34 @@ int main(int argc, char *argv[])
 				&manager,
 				&edit,
 				&fb, 
-				Rect (440, 850, 85, 80), 
-				Rect (440, 850, 85, 80),
+				Rect (20, 755, 209, 80), 
+				Rect (20, 755, 209, 80),
+				Point(2, 11), 
+				&set, 
+				ID_CANCEL
+			)
+		);
+
+	manager.add(  
+		new ActionButton(
+				&manager,
+				&edit,
+				&fb, 
+				Rect (263, 755, 139, 80), 
+				Rect (263, 755, 139, 80),
+				Point(2, 11), 
+				&set, 
+				ID_INFO
+			)
+		);
+
+	manager.add(  
+		new ActionButton(
+				&manager,
+				&edit,
+				&fb, 
+				Rect (440, 755, 85, 80), 
+				Rect (440, 755, 85, 80),
 				Point(2, 11), 
 				&set, 
 				ID_OK

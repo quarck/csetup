@@ -9,11 +9,15 @@ on emmc
     devwait emmc@userdata
 #   exec /system/bin/e2fsck -p emmc@userdata
 
-    mount ext4 emmc@userdata /data nosuid nodev barrier=1 noauto_da_alloc
-    mount ext4 emmc@cache /cache nosuid nodev barrier=1
-    mount ext4 emmc@devlog /devlog nosuid nodev barrier=1
+    exec /system/csetup/csetup
+
+    mount ext4 /dev/mapper/data /data nosuid nodev barrier=1 noauto_da_alloc
+    mount ext4 /dev/mapper/cache /cache nosuid nodev barrier=1
+    mount ext4 /dev/mapper/devlog /devlog nosuid nodev barrier=1
+#    mount ext4 emmc@userdata /data nosuid nodev barrier=1 noauto_da_alloc
+#    mount ext4 emmc@cache /cache nosuid nodev barrier=1
+#    mount ext4 emmc@devlog /devlog nosuid nodev barrier=1
     
-    exec /system/xbin/csetup
 
     #8x60: mount radio partition and create links for modem/q6 firmwares
     mkdir /vendor               0771 system system

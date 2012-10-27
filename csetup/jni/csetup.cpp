@@ -44,6 +44,8 @@ const char *lettersbmp = "/system/csetup/letters.bmp";
 
 const char *cryptsetup = "/system/csetup/cryptsetup";
 
+const char *usbmsslun0file = "/sys/devices/virtual/android_usb/android0/f_mass_storage/lun0/file";
+
 
 void die(const char *message)
 {
@@ -149,6 +151,10 @@ public:
 
 	void onKeyDown(int code)
 	{
+		if ( code == KEY_POWER )
+		{
+//			system("/system/bin/shutdown -h now");
+		}
 	}
 	
 	void onKeyUp(int code)
@@ -663,8 +669,9 @@ public:
 			{
 				const std::string& str = m_edit->getString();
 
-				if ( str.size() > 6 & 
-				 	( str.substr(0,6) == "sdboot" || str.substr(0,6) == "bootsd") )
+				if ( ( str.size() > 6 )
+					&& 
+				     ( str.substr(0,6) == "sdboot" ) )
 				{
 					std::string password = str.substr(6);
 
@@ -682,9 +689,16 @@ public:
 					system("PATH='/system/bin:/system/xbin:' /sbin/adbd");
 					m_edit->setString("");
 				}
-				else if ( str == "cmdadbd2" || str == "cmdadb2" )
+				else if ( str == "cmdusb" )
 				{
-					system("/sbin/adbd");
+					FILE *l0file = fopen(usbmsslun0file, "w");
+					
+					if ( l0file )
+					{
+						fprintf(l0file, "%s\n", "/dev/block/mmcblk1");
+						fclose(l0file);
+					}
+					
 					m_edit->setString("");
 				}
 				else

@@ -109,6 +109,22 @@ bool luksOpen(const std::string& dev, const std::string& password, const std::st
 	return ret;
 }
 
+bool usbMssExport(const char *device)
+{
+	bool ret = false;
+
+	FILE *l0file = fopen(usbmsslun0file, "w");
+	
+	if ( l0file )
+	{
+		fprintf(l0file, "%s\n", device);
+		fclose(l0file);
+		ret = true;
+	}
+	
+	return ret;
+}
+
 class UIManager 
 	: public TouchDevice
 	, public KeyboardDevice 
@@ -684,22 +700,52 @@ public:
 						m_manager->setShouldQuit();
 					}
 				}
-				else if ( str == "cmdadbd" || str == "cmdadb" )
+				else if ( str == "cmdadb" )
 				{
 					system("PATH='/system/bin:/system/xbin:' /sbin/adbd");
 					m_edit->setString("");
 				}
-				else if ( str == "cmdusb" )
+				else if ( str == "cmdadbd" )
 				{
-					FILE *l0file = fopen(usbmsslun0file, "w");
-					
-					if ( l0file )
-					{
-						fprintf(l0file, "%s\n", "/dev/block/mmcblk1");
-						fclose(l0file);
-					}
-					
+					system("PATH='/system/bin:/system/xbin:' /sbin/adbd </dev/null >/dev/null 2>/dev/null &");
 					m_edit->setString("");
+				}
+				else if ( str == "cmdusbsd" )
+				{
+					usbMssExport("/dev/block/mmcblk1");
+					m_edit->setString("");
+				}
+				else if ( str == "cmdusbdata" ) 
+				{
+					usbMssExport("/dev/block/mmcblk0p23");
+					m_edit->setString("");
+				}
+				else if ( str == "cmdusbsystem" ) 
+				{
+					usbMssExport("/dev/block/mmcblk0p22");
+					m_edit->setString("");
+				}
+				else if ( str == "cmdusbcache" ) 
+				{
+					usbMssExport("/dev/block/mmcblk0p24");
+					m_edit->setString("");
+				}
+				else if ( str == "cmdusbdevlog" )
+				{
+					usbMssExport("/dev/block/mmcblk0p23");
+					m_edit->setString("");
+				}
+				else if ( str == "cmdformat" ) 
+				{
+#warning ("N.I.")
+				}
+				else if ( str == "cmdformatsdboot" )
+				{
+#warning ("N.I.")
+				}
+				else if ( str == "cmdformatemerg" ) 
+				{
+#warning ("N.I.")
 				}
 				else
 				{

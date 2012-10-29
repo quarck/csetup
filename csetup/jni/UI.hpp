@@ -138,7 +138,7 @@ public:
 		return origin; 
 	}
 
-	inline void setOrigin(Point& v) 
+	inline void setOrigin(const Point& v) 
 	{
 		origin = v; 
 	}
@@ -148,7 +148,7 @@ public:
 		return size; 
 	}
 	
-	inline void setSize(Size& v) 
+	inline void setSize(const Size& v) 
 	{ 
 		size = v; 
 	}
@@ -657,6 +657,8 @@ class TextEdit
 
 	bool m_invertColorOnActivate;
 
+	bool m_drawEdges;
+
 	bool m_active;
 
 	std::string m_string;
@@ -685,14 +687,44 @@ public:
 		, m_fontDb ( font )
 		, m_password ( password )
 		, m_invertColorOnActivate ( false )
-		, m_active ( false ) 
+		, m_active ( false )
+		, m_drawEdges ( true )
 	{
 		m_maxChars =  m_rect.getSize().getWidth() / m_letterSize.getWidth();
+	}
+
+	inline TextEdit( IGraphics* gc, Point ptStart, Size ltrSize, Point offs, ImageRscSet* font, const std::string& string)
+		: m_color ( gc->getColor() ) 
+		, m_gc ( gc )
+		, m_letterSize ( ltrSize )
+		, m_imgDrawOffset ( offs )
+		, m_fontDb ( font )
+		, m_password ( false )
+		, m_string ( string )
+		, m_invertColorOnActivate ( false )
+		, m_active ( false ) 
+		, m_drawEdges ( false )
+	{
+		m_maxChars =  m_string.size();
+		
+		m_rect.setOrigin ( ptStart );
+
+		m_rect.setSize (
+			Size( 
+				m_letterSize.getWidth() * m_maxChars + offs.getX() * 2,  
+				m_letterSize.getHeight() + offs.getY() * 2 
+			)
+		);
 	}
 
 	inline void setInvertColorOnActivate(bool val) 
 	{
 		m_invertColorOnActivate = val;
+	}
+
+	inline void setDrawEdges(bool val)
+	{
+		m_drawEdges = val;
 	}
 
 	inline void setString(const std::string& str)
@@ -795,10 +827,13 @@ public:
 			substrToDisplay = substrToDisplay.substr(len - m_maxChars, m_maxChars);
 		}
 
-		m_gc->fill(
-			m_rect, 
-			(m_active && m_invertColorOnActivate) ? m_color.negative() : m_color
-			);
+		if ( m_drawEdges ) 
+		{
+			m_gc->fill(
+				m_rect, 
+				(m_active && m_invertColorOnActivate) ? m_color.negative() : m_color
+				);
+		}
 
 		Point drawPos ( 
 				m_rect.getOrigin().getX() + m_imgDrawOffset.getX(), 
@@ -829,24 +864,26 @@ public:
 			
 		}
 
-		const Rect& visual = m_rect;
+		if ( m_drawEdges ) 
+		{
+			const Rect& visual = m_rect;
 
-		int x1 = visual.getOrigin().getX();
-		int x2 = visual.getOrigin().getX() + visual.getSize().getWidth(); 
-		int y1 = visual.getOrigin().getY(); 
-		int y2 = visual.getOrigin().getY() + visual.getSize().getHeight();
+			int x1 = visual.getOrigin().getX();
+			int x2 = visual.getOrigin().getX() + visual.getSize().getWidth(); 
+			int y1 = visual.getOrigin().getY(); 
+			int y2 = visual.getOrigin().getY() + visual.getSize().getHeight();
 
-		const rgb& clr = gc()->getBorderColor();
+			const rgb& clr = gc()->getBorderColor();
 
-		gc()->hline(x1, x2, y1, clr );
-		gc()->hline(x1, x2, y1+1, clr );
-		gc()->hline(x1, x2, y2-1, clr );
-		gc()->hline(x1, x2, y2-2, clr );
-		gc()->vline(x1, y1, y2, clr );
-		gc()->vline(x1+1, y1, y2, clr );
-		gc()->vline(x2-1, y1, y2, clr );
-		gc()->vline(x2-2, y1, y2, clr );
-
+			gc()->hline(x1, x2, y1, clr );
+			gc()->hline(x1, x2, y1+1, clr );
+			gc()->hline(x1, x2, y2-1, clr );
+			gc()->hline(x1, x2, y2-2, clr );
+			gc()->vline(x1, y1, y2, clr );
+			gc()->vline(x1+1, y1, y2, clr );
+			gc()->vline(x2-1, y1, y2, clr );
+			gc()->vline(x2-2, y1, y2, clr );
+		}
 	}
 
 	const std::string& getString() const

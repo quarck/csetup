@@ -299,11 +299,49 @@ public:
 	}
 };
 
+class InfoPaneActionButton : public TextEdit 
+{
+	UIManager* m_manager;
+	UIPane* m_mainPane; 
+	int m_id;
+public:
+	inline InfoPaneActionButton(
+			UIManager * manager,
+			UIPane* mainPane,
+			FrameBuffer* fb, 
+			Point ptStart, 
+			Size ltrSize, 
+			Point offs, 
+			ImageRscSet* font, 
+			const std::string& string,
+			int id
+			)
+		: TextEdit(fb, ptStart, ltrSize, offs, font, string) 
+		, m_manager ( manager )
+		, m_mainPane ( mainPane )
+		, m_id ( id )
+	{
+		this->setInvertColorOnActivate ( true );
+	}
+
+	void onTouchUp(const Point& pt)
+	{
+		this->TextEdit::onTouchUp(pt);
+
+		if ( m_id == 0 ) 
+		{
+			gc()->setBGColor( rgb(90,90,127) );
+			m_manager->setActivePane( m_mainPane );
+		}
+	}
+};
+
 
 class MainPaneActionButton : public ImageButton
 {
-	UIManager *m_manager;
-	TextEdit *m_edit;
+	UIManager* m_manager;
+	UIPane* m_infoPane; 
+	TextEdit* m_edit;
 	int 	m_id;
 
 public:
@@ -322,6 +360,12 @@ public:
 		, m_edit ( edit )
 		, m_id ( imgResId )
 	{
+	}
+
+	MainPaneActionButton* setInfoPane(UIPane* pane)
+	{
+		m_infoPane = pane;
+		return this;
 	}
 
 	void onTouchUp(const Point& pt)
@@ -427,7 +471,8 @@ public:
 			}
 			else if ( m_id == ID_INFO ) 
 			{
-				// N.I.
+				gc()->setBGColor( rgb(255,255,255) );
+				m_manager->setActivePane(m_infoPane);
 			}
 			else if ( m_id == ID_CANCEL ) 
 			{
@@ -495,7 +540,7 @@ int main(int argc, char *argv[])
 
 	ImageRscSet set(letters);
 
-	char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~ ";
+	char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~* ";
 
 	for (int i=0; i<sizeof(chars); i++) 
 	{
@@ -512,13 +557,8 @@ int main(int argc, char *argv[])
 
 	
 	UIPane mainPane;
-	
-	
 	UIPane infoPane;
-	UIPane wipePane;
-	UIPane stopUSBPane;
-
-
+	
 	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
 	mainPane.add(&edit);
 
@@ -557,7 +597,7 @@ int main(int argc, char *argv[])
 		);
 
 	mainPane.add(  
-		new MainPaneActionButton(
+		(new MainPaneActionButton(
 				&manager,
 				&edit,
 				&fb, 
@@ -566,7 +606,7 @@ int main(int argc, char *argv[])
 				Point(2, 11), 
 				&set, 
 				ID_INFO
-			)
+			))->setInfoPane(&infoPane)
 		);
 
 	mainPane.add(  
@@ -595,6 +635,30 @@ int main(int argc, char *argv[])
 			)
 		);
 
+
+	InfoPaneActionButton backToMain(
+			&manager,
+			&mainPane,
+			&fb, 
+			Point(5,15), 
+			Size(30,6), 
+			Point(5, 5), 
+			&set, 
+			"<<< back",
+			0
+			);
+
+	infoPane.add(&backToMain);
+
+#include "info.h"
+
+	for (int i=0; i<sizeof(info)/sizeof(info[0]); i++)
+	{
+		infoPane.add(
+			new TextEdit( &fb, Point(5,70*i+100), Size(30,60), Point(5,5), &set, info[i])
+		);
+	}
+	
 	manager.setActivePane( &mainPane );
 
 	// request repainting

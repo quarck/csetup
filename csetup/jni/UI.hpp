@@ -10,6 +10,7 @@
 #include <string>
 
 #include "Image.hpp"
+#include "IKeyboardEditable.hpp"
 
 struct rgb
 {
@@ -293,6 +294,9 @@ public:
 	}
 };
 
+class UIPane : public WidgetsCollection
+{
+};
 
 class IGraphics
 {
@@ -633,7 +637,9 @@ public:
 
 
 
-class TextEdit : public IWidget
+class TextEdit 
+	: public IWidget
+	, public IKeyboardEditable
 {
 	rgb m_color;
 	
@@ -647,7 +653,11 @@ class TextEdit : public IWidget
 
 	Size m_letterSize;
 
-	int m_maxSize;
+	int m_maxChars;
+
+	bool m_invertColorOnActivate;
+
+	bool m_active;
 
 	std::string m_string;
 	std::string m_displayString;
@@ -674,8 +684,15 @@ public:
 		, m_imgDrawOffset ( offs )
 		, m_fontDb ( font )
 		, m_password ( password )
+		, m_invertColorOnActivate ( false )
+		, m_active ( false ) 
 	{
-		m_maxSize =  m_rect.getSize().getWidth() / m_letterSize.getWidth();
+		m_maxChars =  m_rect.getSize().getWidth() / m_letterSize.getWidth();
+	}
+
+	inline void setInvertColorOnActivate(bool val) 
+	{
+		m_invertColorOnActivate = val;
 	}
 
 	inline void setString(const std::string& str)
@@ -693,7 +710,7 @@ public:
 		}
 	}
 
-	inline void appendChar(char c)
+	void appendChar(char c)
 	{
 		m_string += c;
 
@@ -710,7 +727,7 @@ public:
 		m_gc->invalidate();
 	}
 
-	inline void backspace()
+	void backspace()
 	{
 		if ( m_string.size() ) 
 		{
@@ -723,7 +740,7 @@ public:
 		}
 	}
 
-	inline void hideLastChr()
+	void hideLastChar()
 	{
 		if ( m_displayString.size())
 		{
@@ -751,10 +768,14 @@ public:
 
 	void onTouchDown(const Point& pt)
 	{
+		m_active = true;
+		if ( m_invertColorOnActivate ) 
+			m_gc->invalidate();
 	}
 
 	void onTouchUp(const Point& pt)
 	{
+		m_active = false;
 	}
 	
 	void onTouchUpdate(const Point& pt)
@@ -769,12 +790,15 @@ public:
 
 		substrToDisplay = m_password ? m_displayString : m_string;
 		
-		if ( len >= m_maxSize )
+		if ( len >= m_maxChars )
 		{
-			substrToDisplay = substrToDisplay.substr(len - m_maxSize, m_maxSize);
+			substrToDisplay = substrToDisplay.substr(len - m_maxChars, m_maxChars);
 		}
 
-		m_gc->fill(m_rect, m_color);
+		m_gc->fill(
+			m_rect, 
+			(m_active && m_invertColorOnActivate) ? m_color.negative() : m_color
+			);
 
 		Point drawPos ( 
 				m_rect.getOrigin().getX() + m_imgDrawOffset.getX(), 
@@ -795,7 +819,7 @@ public:
 					drawPos, 
 					srcImg, 
 					srcRect, 
-					false 
+					m_active ? m_invertColorOnActivate : false 
 				);
 			}
 

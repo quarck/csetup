@@ -1,0 +1,14 @@
+#ifndef __RESOURCES_HPP__
+#define __RESOURCES_HPP__
+
+enum {
+	ID_SHIFT = 1000, 
+	ID_SHIFT_ACTIVE = 1001, 
+	ID_BACKSPACE = 1002, 
+	ID_OK = 1003, 
+	ID_CANCEL = 1004,
+	ID_INFO = 1005, 
+	ID_EMERGENCY = 1006
+};
+
+#endif

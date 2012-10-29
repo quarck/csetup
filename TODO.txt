@@ -1,7 +1,5 @@
 add poweroff button 
 
-add the main functionality finally!!
-
 add the 'password under the pressure'
 
 add the info button with the info page

@@ -36,6 +36,10 @@
 
 #include "BMP.hpp"
 
+#include "Keyboard.hpp"
+
+#include "resources.hpp"
+
 const char *touch_device = "/dev/input/event2";
 const char *keyboard_device = "/dev/input/event3";
 const char *fb_device = "/dev/graphics/fb0";
@@ -46,22 +50,25 @@ const char *cryptsetup = "/system/csetup/cryptsetup";
 
 const char *usbmsslun0file = "/sys/devices/virtual/android_usb/android0/f_mass_storage/lun0/file";
 
+const char *devint = "/dev/block/mmcblk0";
+const char *devsdcard = "/dev/block/mmcblk1";
 
-void die(const char *message)
-{
-	printf("%s\n", message);
-	exit(-1);
-}
+const char *partmainsystem = "/dev/block/mmcblk0p22";
+const char *partmaindata = "/dev/block/mmcblk0p23";
+const char *partmaincache = "/dev/block/mmcblk0p24";
+const char *partmaindevlog = "/dev/block/mmcblk0p28";
+const char *partmainsd = "/dev/block/mmcblk1p7";
 
-enum {
-	ID_SHIFT = 1000, 
-	ID_SHIFT_ACTIVE = 1001, 
-	ID_BACKSPACE = 1002, 
-	ID_OK = 1003, 
-	ID_CANCEL = 1004,
-	ID_INFO = 1005, 
-	ID_EMERGENCY = 1006
-};
+const char *partsdbootdata = "/dev/block/mmcblk1p6";
+const char *partsdbootcache = "/dev/block/mmcblk1p5";
+const char *partsdbootdevlog = "/dev/block/mmcblk1p3"; // using emerg's devlog - use 'emerg' passwd 
+
+const char *partemergdata = "/dev/block/mmcblk1p2";
+const char *partemergcache = "/dev/block/mmcblk1p1";
+const char *partemergdevlog = "/dev/block/mmcblk1p3";
+
+const char *emergPasswd = "emerg";
+
 
 bool luksOpen(const std::string& dev, const std::string& password, const std::string& dmname)
 {
@@ -128,17 +135,13 @@ bool usbMssExport(const char *device)
 class UIManager 
 	: public TouchDevice
 	, public KeyboardDevice 
-	, public WidgetsCollection 
 {
-	WidgetsCollection widgets;
-	
+	UIPane*  m_activePane;
 	IWidget* m_activeButton;
 
 	FrameBuffer* m_fb;
 
 	bool m_shouldQuit;
-
-	time_t m_timePowerBtnDown;
 
 public:
 	inline UIManager(
@@ -148,10 +151,8 @@ public:
 			)
 		: TouchDevice ( touchDev, fb->xres(), fb->yres() )
 		, KeyboardDevice ( kbdDev )
-		, WidgetsCollection ( )
 		, m_fb (fb)
 		, m_activeButton ( NULL )
-		, m_timePowerBtnDown(0)
 	{
 	}
 
@@ -191,7 +192,7 @@ public:
 			m_activeButton = NULL;
 		}
 
-		IWidget* wdgt = this->hitTest(pt);
+		IWidget* wdgt = m_activePane ? m_activePane->hitTest(pt) : NULL;
 
 		if ( wdgt != NULL ) 
 		{
@@ -228,11 +229,20 @@ public:
 			m_fb->nextActiveBuffer();
 			m_fb->fill( m_fb->getBGColor() );
 
-			this->draw();
+			if ( m_activePane != NULL ) 
+			{
+				m_activePane->draw();
+			}
 
 			m_fb->switchToActiveBuf();
 			m_fb->setUpdated();
 		}
+	}
+
+	void setActivePane(UIPane* pane)
+	{
+		m_activePane = pane;
+		m_fb->invalidate();
 	}
 
 	void run()
@@ -289,374 +299,15 @@ public:
 	}
 };
 
-class Keyboard;
 
-class LetterButton: public ImageButton
-{
-	TextEdit * m_edit;
-	int m_char;
-	int m_charShifted;
-
-	bool m_shiftActive;
-
-	Keyboard* m_keyboard;
-
-public:
-	LetterButton(
-			Keyboard* keyboard,
-			TextEdit* edit, 
-			FrameBuffer *fb, 
-			const Rect& visual, 
-			const Rect& active, 
-			const Point& imgBasePoint,
-			ImageRscSet* rscSet, 
-			int chr, int chrShifted	
-		)
-		: ImageButton(fb, visual, active, imgBasePoint, rscSet, chr, chrShifted)
-		, m_keyboard (keyboard)
-		, m_edit (edit)
-		, m_char (chr)
-		, m_charShifted (chrShifted)
-		, m_shiftActive( false )
-	{
-	}
-
-	void onTouchUp(const Point& pt);
-
-	void setShift(bool shift)
-	{
-		m_shiftActive = shift;
-
-		if ( m_shiftActive ) 
-			setActiveImage(1);
-		else
-			setActiveImage(0);
-	}
-
-	bool getShift() const
-	{
-		return m_shiftActive;
-	}
-};
-
-class BackspaceButton: public ImageButton
-{
-	TextEdit * m_edit;
-public:
-	BackspaceButton(
-			TextEdit* edit, 
-			FrameBuffer *fb, 
-			const Rect& visual, 
-			const Rect& active, 
-			const Point& imgBasePoint,
-			ImageRscSet* rscSet, 
-			int chr
-		)
-		: ImageButton(fb, visual, active, imgBasePoint, rscSet, chr)
-		, m_edit (edit)
-	{
-	}
-
-	void onTouchUp(const Point& pt)
-	{
-		this->BasicButton::onTouchUp(pt);
-
-		if ( weakHitTest(pt) ) 
-		{
-			m_edit->backspace();
-		}
-	}
-};
-
-
-class ShiftButton : public LetterButton 
-{
-	Keyboard* m_keyboard;
-public:
-	inline ShiftButton(
-			TextEdit* edit,
-			Keyboard* kbd,
-			FrameBuffer* fb, 
-			const Rect& visual, 
-			const Rect& active, 
-			const Point& imgBasePoint,
-			ImageRscSet* rscSet, 
-			int imgResId, int imgResIdActive
-			)
-		: LetterButton(kbd, edit, fb, visual, active, imgBasePoint, rscSet, imgResId, imgResIdActive)
-		, m_keyboard(kbd)
-	{
-	}
-
-	void onTouchUp(const Point& pt);
-};
-
-
-class Keyboard
-{
-	UIManager* m_manager;
-	TextEdit* m_edit;
-	FrameBuffer* m_fb;
-
-	bool m_shiftActive;
-
-	std::list<LetterButton*> m_buttons;
-
-public:
-	inline Keyboard(
-		UIManager * manager,
-		TextEdit  * edit,
-		FrameBuffer* fb, 
-		ImageRscSet* set
-		)
-		: m_manager ( manager ) 
-		, m_edit ( edit )
-		, m_fb ( fb )
-		, m_shiftActive ( false )
-	{
-		char lineA[] = "-=_+[{]};:";
-		char lineB[] = "!@#$%^&*()";
-
-		char line0[] = "1234567890";
-
-		char line1lc[] = "qwertyuiop";
-		char line1uc[] = "QWERTYUIOP";
-		
-		char line2lc[] = "asdfghjkl";
-		char line2uc[] = "ASDFGHJKL";
-
-		char line3lc[] = "zxcvbnm";
-		char line3uc[] = "ZXCVBNM";
-		
-		char lineZ[] = "'\"\\|,<.>/?`~";
-
-		int ybase = 145;
-		int xbase = 0;
-
-		for (int i=0; i<sizeof(lineZ)-1; i++ )
-		{
-			Rect visual (i * 45 + xbase, ybase, 45-4, 80-4);
-			Rect active (i * 45 + xbase - 2, ybase-2, 45, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this,
-					m_edit,
-					m_fb, visual, active, 
-					Point(6, 15), 
-					set, lineZ[i], lineZ[i]
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-		}
-		
-		ybase += 80;
-		
-		for (int i=0; i<sizeof(lineA)-1; i++ )
-		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this, 
-					m_edit,
-					m_fb, visual, active, 
-					Point(10, 15), 
-					set, lineA[i], lineA[i]
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-		}
-		
-		ybase += 80;
-
-		
-		for (int i=0; i<sizeof(lineB)-1; i++ )
-		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this, 
-					m_edit,
-					m_fb, visual, active, 
-					Point(10, 15), 
-					set, lineB[i], lineB[i]
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-
-		}
-		
-		ybase += 110;
-
-		for (int i=0; i<sizeof(line0)-1; i++ )
-		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this, 
-					m_edit,
-					m_fb, visual, active, 
-					Point(10, 15), 
-					set, line0[i], line0[i]
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-		}
-		
-		ybase += 90;
-
-		for (int i=0; i<sizeof(line1lc)-1; i++ )
-		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this, 
-					m_edit,
-					m_fb, visual, active, 
-					Point(10, 15), 
-					set, line1lc[i], line1uc[i] 
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-		}
-
-		ybase += 80;
-		xbase += 54*2/3;
-
-		for (int i=0; i<sizeof(line2lc)-1; i++ )
-		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this, 
-					m_edit,
-					m_fb, visual, active, 
-					Point(10, 15), 
-					set, line2lc[i], line2uc[i] 
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-		}
-
-		ybase += 80;
-		xbase += 54*2/3;
-
-		for (int i=0; i<sizeof(line3lc)-1; i++ )
-		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
-
-			LetterButton* btn = 
-				new LetterButton(
-					this, 
-					m_edit,
-					m_fb, visual, active, 
-					Point(10, 15), 
-					set, line3lc[i], line3uc[i]
-				   );
-
-			m_manager->add(btn);
-			m_buttons.push_back(btn);
-		}
-		
-		BackspaceButton* backspace = 
-			new BackspaceButton(
-					m_edit,
-					m_fb, 
-					Rect ( 7 * 54 + xbase + 5, ybase, 80, 80-4), 
-					Rect ( 7 * 54 + xbase + 5- 2, ybase-2, 84, 80),
-					Point(15, 7), 
-					set, 
-					ID_BACKSPACE
-				);
-		m_manager->add(backspace);
-
-		ShiftButton* shift = 
-			new ShiftButton(
-				m_edit,
-				this,
-				m_fb, 
-				Rect (  2, ybase, 66, 80-4), 
-				Rect ( 2, ybase-2, 66, 80),
-				Point(10, 5), 
-				set, 
-				ID_SHIFT, ID_SHIFT_ACTIVE
-			);
-	
-		m_manager->add(shift);
-		m_buttons.push_back(shift);
-	}
-
-	void setShift(bool shift) 
-	{
-		m_shiftActive = shift;
-
-		for (std::list<LetterButton*>::iterator iter = m_buttons.begin(); 
-			iter != m_buttons.end();
-			++ iter
-		    )
-		{
-			(*iter)->setShift(m_shiftActive);
-		}
-
-		m_fb->invalidate();
-	}
-
-	void toggleShift()
-	{
-		setShift( ! m_shiftActive );
-	}
-};
-
-void ShiftButton::onTouchUp(const Point& pt)
-{
-	this->BasicButton::onTouchUp(pt);
-
-	if ( weakHitTest(pt) ) 
-	{
-		m_keyboard->toggleShift();
-	}
-}
-
-void LetterButton::onTouchUp(const Point& pt)
-{
-	this->BasicButton::onTouchUp(pt);
-
-	if ( weakHitTest(pt) ) 
-	{
-		m_edit->appendChar( m_shiftActive ? m_charShifted : m_char);
-
-		if ( m_keyboard ) 
-		{
-			m_keyboard->setShift(false);
-		}
-	}
-}
-
-class ActionButton : public ImageButton
+class MainPaneActionButton : public ImageButton
 {
 	UIManager *m_manager;
 	TextEdit *m_edit;
 	int 	m_id;
 
 public:
-	inline ActionButton(
+	inline MainPaneActionButton(
 			UIManager * manager,
 			TextEdit  * edit,
 			FrameBuffer* fb, 
@@ -677,7 +328,7 @@ public:
 	{
 		this->BasicButton::onTouchUp(pt);
 
-		m_edit->hideLastChr();
+		m_edit->hideLastChar();
 
 		if ( weakHitTest(pt) ) 
 		{
@@ -691,9 +342,9 @@ public:
 				{
 					std::string password = str.substr(6);
 
-					bool data = luksOpen("/dev/block/mmcblk1p6",  password, "data");
-					bool cache = luksOpen("/dev/block/mmcblk1p5",  password, "cache");
-					bool devlog = luksOpen("/dev/block/mmcblk1p3",  "emerg", "devlog");
+					bool data = luksOpen(partsdbootdata,  password, "data");
+					bool cache = luksOpen(partsdbootcache,  password, "cache");
+					bool devlog = luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
 
 					if ( data && cache && devlog ) 
 					{
@@ -712,27 +363,27 @@ public:
 				}
 				else if ( str == "cmdusbsd" )
 				{
-					usbMssExport("/dev/block/mmcblk1");
+					usbMssExport(devsdcard);
 					m_edit->setString("");
 				}
 				else if ( str == "cmdusbdata" ) 
 				{
-					usbMssExport("/dev/block/mmcblk0p23");
+					usbMssExport(partmaindata);
 					m_edit->setString("");
 				}
 				else if ( str == "cmdusbsystem" ) 
 				{
-					usbMssExport("/dev/block/mmcblk0p22");
+					usbMssExport(partmainsystem);
 					m_edit->setString("");
 				}
 				else if ( str == "cmdusbcache" ) 
 				{
-					usbMssExport("/dev/block/mmcblk0p24");
+					usbMssExport(partmaincache);
 					m_edit->setString("");
 				}
 				else if ( str == "cmdusbdevlog" )
 				{
-					usbMssExport("/dev/block/mmcblk0p23");
+					usbMssExport(partmaindevlog);
 					m_edit->setString("");
 				}
 				else if ( str == "cmdformat" ) 
@@ -751,11 +402,11 @@ public:
 				{
 					const std::string& password = str;
 
-					bool data = luksOpen("/dev/block/mmcblk0p23",  password, "data");
-					bool cache = luksOpen("/dev/block/mmcblk0p24",  password, "cache");
-					bool devlog = luksOpen("/dev/block/mmcblk0p28",  password, "devlog");
+					bool data = luksOpen(partmaindata,  password, "data");
+					bool cache = luksOpen(partmaincache,  password, "cache");
+					bool devlog = luksOpen(partmaindevlog,  password, "devlog");
 
-					bool sd = luksOpen("/dev/block/mmcblk1p7", m_edit->getString(), "sd");
+					bool sd = luksOpen(partmainsd, m_edit->getString(), "sd");
 					
 					if ( data && cache && devlog ) 
 					{
@@ -765,11 +416,9 @@ public:
 			}
 			else if ( m_id == ID_EMERGENCY )
 			{
-				std::string password = "emerg";
-
-				bool data = luksOpen("/dev/block/mmcblk1p2",  password, "data");
-				bool cache = luksOpen("/dev/block/mmcblk1p1",  password, "cache");
-				bool devlog = luksOpen("/dev/block/mmcblk1p3",  password, "devlog");
+				bool data = luksOpen(partemergdata,  emergPasswd, "data");
+				bool cache = luksOpen(partemergcache,  emergPasswd, "cache");
+				bool devlog = luksOpen(partemergdevlog,  emergPasswd, "devlog");
 
 				if ( data && cache && devlog ) 
 				{
@@ -825,12 +474,22 @@ int main(int argc, char *argv[])
 	FrameBuffer fb(fb_device);
 
 	if ( !fb.isValid() ) 
-		die("Failed to open frame buffer device");
+	{
+		fprintf(stderr, "Failed to open frame buffer device");
+		return -1;
+	}
+
+	fb.setBGColor( rgb(90,90,127) );
+	fb.setColor( rgb(255,255,255 ) );
 
 	UIManager manager( touch_device, keyboard_device, &fb );
+	
 
-	if ( !manager.isValid() ) 
-		die("Failed to open touch screen device");
+	if ( !manager.isValid() )
+	{
+		fprintf(stderr, "Failed to open touch screen device");
+		return -1;
+	}
 
 	Image* letters = bmp::readImage(lettersbmp);
 
@@ -851,9 +510,17 @@ int main(int argc, char *argv[])
 	set.addRes(ID_INFO, Rect(3463, 0, 135, 60));
 	set.addRes(ID_EMERGENCY, Rect(3602, 0, 318, 60));
 
-	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
+	
+	UIPane mainPane;
+	
+	
+	UIPane infoPane;
+	UIPane wipePane;
+	UIPane stopUSBPane;
 
-	manager.add(&edit);
+
+	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
+	mainPane.add(&edit);
 
 	ClearButton clearBtn(
 			&manager,
@@ -866,20 +533,18 @@ int main(int argc, char *argv[])
 			'X'
 		);
 
-	manager.add(&clearBtn);
-
-	fb.setBGColor( rgb(90,90,127) );
-	fb.setColor( rgb(255,255,255 ) );
+	mainPane.add(&clearBtn);
 
 	Keyboard keyboard(
-			&manager,
+			&mainPane,
 			&edit,
 			&fb, 
-			&set
+			&set,
+			145
 		);
 
-	manager.add(  
-		new ActionButton(
+	mainPane.add(  
+		new MainPaneActionButton(
 				&manager,
 				&edit,
 				&fb, 
@@ -891,8 +556,8 @@ int main(int argc, char *argv[])
 			)
 		);
 
-	manager.add(  
-		new ActionButton(
+	mainPane.add(  
+		new MainPaneActionButton(
 				&manager,
 				&edit,
 				&fb, 
@@ -904,8 +569,8 @@ int main(int argc, char *argv[])
 			)
 		);
 
-	manager.add(  
-		new ActionButton(
+	mainPane.add(  
+		new MainPaneActionButton(
 				&manager,
 				&edit,
 				&fb, 
@@ -917,8 +582,8 @@ int main(int argc, char *argv[])
 			)
 		);
 
-	manager.add(  
-		new ActionButton(
+	mainPane.add(  
+		new MainPaneActionButton(
 				&manager,
 				&edit,
 				&fb, 
@@ -929,6 +594,8 @@ int main(int argc, char *argv[])
 				ID_EMERGENCY
 			)
 		);
+
+	manager.setActivePane( &mainPane );
 
 	// request repainting
 	fb.invalidate();

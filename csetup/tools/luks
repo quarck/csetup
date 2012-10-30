@@ -1,0 +1,519 @@
+#!/system/bin/sh
+#
+# luks shell script - by Nemesis][ - http://nemesis2.qx.net
+#
+version=1.9
+#
+#
+# A simple shell script to create/mount/unmount encrypted volumes on
+# Android devices.
+#
+# Text data files are stored in: /data/data/com.nemesis2.luksmanager/.data
+#
+# File naming convention:
+#
+# <volume>.path            -  full path to <volume>.vol
+# <volume>.loop            -  loopback device for <volume>
+# <volume>.mount.point     -  mount point for encrypted volume
+# <volume>.pre-mount.sh    -  shell script to run before mounting
+# <volume>.mount.sh        -  shell script to run after mounting
+# <volume>.pre-unmount.sh  -  shell script to run before unmounting
+# <volume>.unmount.sh      -  shell script to run after unmounting
+#
+
+#
+# path to store volume information
+#
+data=/data/data/com.nemesis2.luksmanager
+data_path=${data}/.data
+# Check for Samsung preferences path
+if [ -d /dbdata/databases/com.nemesis2.luksmanager ]; then
+    data=/dbdata/databases/com.nemesis2.luksmanager
+fi
+prefs_file=${data}/shared_prefs/com.nemesis2.luksmanager_preferences.xml
+
+#
+# make sure that path exists
+#
+if [ ! -d "${data_path}" ]; then
+    echo "Aborting.  Path does not exist: ${data_path}"
+    exit 127
+fi
+
+#
+# default path to mount volume
+#
+defaultmountpath=`busybox grep LUKSVolumeMount ${prefs_file} | busybox cut -f 2 -d ">" | busybox cut -f 1 -d "<"` > /dev/null 2>&1
+if [ "${defaultmountpath}x" = "x" ]; then
+  defaultmountpath=/mnt/sdcard
+fi
+
+#
+# cipher to use
+# See /proc/crypto for available ciphers
+#
+cipher=`busybox grep LUKSVolumeCipher ${prefs_file} | busybox cut -f 2 -d ">" | busybox cut -f 1 -d "<"` > /dev/null 2>&1
+if [ "${cipher}x" = "x" ]; then
+  cipher=aes-plain
+fi
+
+#
+# keysize to use
+#
+keysize=`busybox grep LUKSVolumeKeysize ${prefs_file} | busybox cut -f 2 -d ">" | busybox cut -f 1 -d "<"` > /dev/null 2>&1
+if [ "${keysize}x" = "x" ]; then
+    keysize=256
+fi
+
+#
+# if a volume name was passed set it instead of asking for it
+#
+if ! [ "${2}x" = "x" ]; then
+  vol_arg=$2
+fi
+
+#
+# Some devices already have cryptsetup.
+# If cryptsetup exists use it, otherwise use ours.
+#
+cs=/system/bin/lm.cryptsetup
+if [ -f /system/bin/cryptsetup ]; then
+  cs=/system/bin/cryptsetup
+fi
+
+case "$1" in
+        mount)
+            # volume wasn't passed ask for it
+            if [ "${vol_arg}x" = "x" ]; then
+                echo "Available volumes:"
+                echo ""
+                busybox ls ${data_path} | busybox grep .path | busybox cut -f 1 -d "." | busybox sort
+                echo ""
+                echo -n "Enter volume to mount: " && read vol_arg
+            fi
+
+            # set volume mount point
+            if [ -f ${data_path}/${vol_arg}.mount.point ]; then
+                # use user defined moint point
+                mount_path=`cat ${data_path}/${vol_arg}.mount.point`
+            else
+                mount_path=${defaultmountpath}/${vol_arg}
+            fi
+
+            # make sure point doesn't already exist
+            if [ ! -d "${mount_point}" ]; then
+
+                # make sure we have a loop device
+                if [ -f ${data_path}/${vol_arg}.loop ]; then
+                    echo "Mount volume: ${vol_arg}"
+                    echo ""
+
+                    loopdev=`cat ${data_path}/${vol_arg}.loop`
+                    if [ ! ${loopdev} -eq ${loopdev} 2> /dev/null ] ; then
+                        echo ""
+                        echo "An error occured, invalid loopback device name."
+                        echo "Please fix: ${data_path}/${vol_arg}.loop"
+                        exit 127
+                    fi
+
+                    busybox mknod /dev/loop${loopdev} b 7 $loopdev
+
+                    # get full path to volume data file
+                    volume_path=`cat ${data_path}/${vol_arg}.path`
+
+                    if ! [ -e ${volume_path}/${vol_arg}.vol ]; then
+                        echo ""
+                        echo "An error occured, container file not found."
+                        echo "Please fix: ${data_path}/${vol_arg}.path"
+                        busybox rm -f /dev/loop${loopdev}
+                        exit 127
+                    fi
+
+                    # assign to loopback device
+                    busybox losetup /dev/loop${loopdev} ${volume_path}/${vol_arg}.vol
+
+                    # open encrypted volume with cryptsetup
+                    if [ "${3}x" = "x" ]; then
+                        ${cs} luksOpen /dev/loop${loopdev} ${vol_arg}
+                    else
+                        echo "$3" | ${cs} luksOpen /dev/loop${loopdev} ${vol_arg}
+                    fi
+
+                    # volume opened correctly
+                    if [ "$?" -eq "0" ]; then
+
+                        # run pre-mount script if it exists
+                        if [ -f ${data_path}/${vol_arg}.pre-mount.sh ]; then
+                            sh ${data_path}/${vol_arg}.pre-mount.sh
+                        fi
+
+                        # create mount point and set permissions
+                        busybox mkdir ${mount_path}
+                        busybox chmod 777 ${mount_path}
+
+                        # mount it
+                        busybox mount /dev/mapper/${vol_arg} ${mount_path}
+
+                        # volume was mounted
+                        if [ "$?" -eq "0" ]; then
+
+                            # fix permissions
+                            busybox chmod 777 ${mount_path}
+                            busybox chmod 777 -R ${mount_path}
+                            echo ""
+                            ${cs} status ${vol_arg}
+                            echo ""
+
+                            # run after mount script if it exists
+                            echo "Volume mounted at: ${mount_path}"
+                            if [ -f ${data_path}/${vol_arg}.mount.sh ]; then
+                                   sh ${data_path}/${vol_arg}.mount.sh
+                            fi
+
+                        else
+                               echo ""
+                               echo "An error occured, volume not mounted."
+                               busybox losetup -d /dev/loop${loopdev}
+                               busybox rm -f /dev/loop${loopdev}
+                               exit 127
+                        fi
+                    else
+                        echo ""
+                        echo "An error occured, volume not mounted."
+                        busybox losetup -d /dev/loop${loopdev}
+                        busybox rm -f /dev/loop${loopdev}
+                        exit 127
+                    fi
+                else
+                    echo ""
+                    echo "An error occured, volume not mounted."
+                fi
+            fi
+        ;;
+        unmount)
+            if [ "${vol_arg}x" = "x" ]; then
+                echo "Mounted volumes:"
+                echo ""
+                busybox mount | busybox grep mapper | busybox cut -f 3 -d \  | busybox sort
+                echo ""
+                echo -n "Enter volume to unmount: " && read vol_arg
+            fi
+
+            # run pre-unmount script if it exists
+            if [ -f ${data_path}/${vol_arg}.pre-unmount.sh ]; then
+                sh ${data_path}/${vol_arg}.pre-unmount.sh
+            fi
+
+            # get loopback device
+            loopdev=`cat ${data_path}/${vol_arg}.loop`
+
+            # set volume mount point
+            if [ -f ${data_path}/${vol_arg}.mount.point ]; then
+                # use user defined moint point
+                mount_path=`cat ${data_path}/${vol_arg}.mount.point`
+            else
+                mount_path=${defaultmountpath}/${vol_arg}
+            fi
+
+            # unmount it
+            busybox umount "${mount_path}" > /dev/null 2>&1
+            
+            # close LUKS volume
+            ${cs} luksClose ${vol_arg} > /dev/null 2>&1
+            
+            # device still there?
+			busybox mount | busybox grep mapper | busybox grep "${vol_arg}" > /dev/null 2>&1 
+            if [ "$?" -eq "0" ]; then
+				echo "Error unmounting: ${vol_arg} - Volume in use?"
+				echo " "
+				exit 127
+			else
+            	# remove mount point
+	            if [ -d "${mount_path}" ]; then
+               		busybox rmdir "${mount_path}" > /dev/null 2>&1
+	            fi
+
+            	# detach and remove loopback device
+           		busybox losetup -d /dev/loop${loopdev} > /dev/null 2>&1
+           		if [ -b "/dev/loop${loopdev}" ]; then
+           	 		busybox rm -f /dev/loop${loopdev}
+           		fi
+
+           		# run after unmounted script if it exists
+           		if [ -f ${data_path}/${vol_arg}.unmount.sh ]; then
+           			sh ${data_path}/${vol_arg}.unmount.sh
+           		fi
+
+            	echo "Unmounted volume: ${vol_arg}"
+            fi
+        ;;
+        unmountall)
+            echo "Unmount all volumes..."
+            echo ""
+            for i in `busybox ls ${data_path} | busybox grep .path | busybox cut -f 1 -d "." | busybox sort`; do
+                 $0 unmount ${i}
+            done
+            echo "All volumes unmounted"
+        ;;
+        create)
+            # 1 = create
+            # 2 = name
+            # 3 = path to volume
+            # 4 = password
+            # 5 = size in MB
+            # 6 = FAT or EXT2
+            # 7 = Use lm.mkdosfs
+            if [ "${5}x" = "x" ]; then
+                    echo "Create new LUKS volume"
+                    echo ""
+                    echo "Volume names should be a single word, no spaces or '.' (periods), dashes are allowed."
+                    echo ""
+            fi
+            if [ "${2}x" = "x" ]; then
+                    echo -n "Enter a volume name: " && read vname
+            else
+                vname=$2
+            fi
+            if [ "x${vname}" == "x" ]; then
+                   echo "Volume name can not be blank.  Exiting."
+                exit
+            fi
+            if [ "${3}x" = "x" ]; then
+                    echo -n "Enter volume path: " && read vpath
+            else
+                vpath=$3
+            fi
+            if [ "x${vpath}" == "x" ]; then
+                   echo "Volume path can not be blank.  Exiting."
+                exit
+            fi
+            if [ "${4}x" = "x" ]; then
+                   echo -n "Enter volume password: " && read pword
+            else
+                   pword=$4
+            fi
+            if [ "x${pword}" == "x" ]; then
+                echo "Password can not be blank.  Exiting."
+                exit
+            fi
+            if [ "${5}x" = "x" ]; then
+                   echo -n "Enter Size in MB (1MB = 1048576 bytes): " && read mb
+            else
+                   mb=$5
+            fi
+            if ! [ ${mb} -gt 0 2>/dev/null ]; then
+                echo "Must be a positive whole number.  Exiting."
+                exit
+            fi
+            if [ ${mb} -lt 3 2>/dev/null ]; then
+                echo "Must be a least 3MB.  Setting size to 3MB."
+                mb=3
+            fi            
+            if [ "${6}x" = "x" ]; then
+                fstype="EXT2"
+            else
+                fattype=32
+                if [ ${mb} -lt 35 2>/dev/null ]; then
+                           fattype=16
+                  fi
+                if [ ${mb} -lt 11 2>/dev/null ]; then
+                       fattype=12
+                fi
+                fstype="FAT${fattype}"
+            fi
+            echo ""
+            echo -n "Creating ${fstype} LUKS volume... "
+
+            # create blank file
+            busybox dd if=/dev/zero of=${vpath}/${vname}.vol bs=1048576 count=$mb > /dev/null 2>&1
+
+            # write the volumes path
+            echo "$vpath" > ${data_path}/${vname}.path
+
+            # check for loopback count filer
+            if ! [ -f ${data_path}/loopdev.count ]; then
+                echo "300" > ${data_path}/loopdev.count
+            fi
+
+            # get loop count and add one
+            loopd=`cat ${data_path}/loopdev.count`
+
+            # sanity check
+            if [ ${loopd} -ne ${loopd} 2> /dev/null ] ; then
+                loopd=300;
+            fi
+
+            newloopdev=`expr $loopd + 1`
+            # write the device to a file
+            echo $newloopdev > ${data_path}/loopdev.count
+
+            # write to volume loop file
+            echo "$loopd" > ${data_path}/${vname}.loop
+
+            # create loopback device
+            busybox mknod /dev/loop${loopd} b 7 $loopd > /dev/null 2>&1
+
+            # assign to loopback device
+            busybox losetup /dev/loop${loopd} ${vpath}/${vname}.vol
+
+            # create LUKS volume
+            echo "${pword}" | ${cs} luksFormat -c ${cipher} -s ${keysize} /dev/loop${loopd}
+            echo "${pword}" | ${cs} luksOpen /dev/loop${loopd} ${vname}
+
+            # format filesystem on LUKS volume
+            if [ "${6}x" = "x" ]; then
+                busybox mke2fs -q -O resize_inode,dir_index -L LUKS-${vname} -FF /dev/mapper/${vname} > /dev/null
+            else
+                if [ "${7}x" = "x" ]; then
+                    mkdosfs -n "${vname}" -F $fattype /dev/mapper/${vname} > /dev/null
+                else
+                    lm.mkdosfs -n "${vname}" -F $fattype /dev/mapper/${vname} > /dev/null
+                fi
+            fi
+
+            # Make sure it all went OK
+            if [ "$?" -eq "0" ]; then
+                echo "Done."
+                mkdir ${defaultmountpath}/${vname} > /dev/null
+                busybox chmod 777 ${defaultmountpath}/${vname} > /dev/null
+                busybox mount /dev/mapper/${vname} ${defaultmountpath}/${vname}
+                busybox chmod 777 ${defaultmountpath}/${vname} > /dev/null
+                echo ""
+                echo "Volume created as : ${vname}"
+                echo "Volume stored at  : ${vpath}"
+                echo "Volume mounted at : ${defaultmountpath}/${vname}"
+                echo ""
+                ${cs} status ${vname}
+                echo ""
+            else
+                echo ""
+                echo "An error occured during format."
+                echo ""
+                echo "Volume not mounted, removing..."
+                echo ""
+                ${cs} luksClose ${vname} > /dev/null 2>&1
+                busybox losetup -d /dev/loop${loop} > /dev/null 2>&1
+                if [ -b "/dev/loop${loopd}" ]; then
+                    busybox rm -f /dev/loop${loopd}
+                fi
+                $0 remove ${vname} yes
+            fi
+        ;;
+        remove)
+            if [ "${vol_arg}x" = "x" ]; then
+                echo "Available volumes:"
+                echo ""
+                busybox ls ${data_path} | busybox grep .path | busybox cut -f 1 -d "." | busybox sort
+                echo ""
+                echo -n "Enter Volume to remove: " && read vol_arg
+                echo ""
+            fi
+            if [ "x${vol_arg}" == "x" ]; then
+                echo "Volume can not be blank.  Exiting."
+                exit
+            fi
+            if ! [ "${3}" == "yes" ]; then
+                echo "Press ENTER to remove volume: ${vol_arg}"
+                echo "Press Control-C or Kill Script to abort."
+                read novar
+            fi
+            $0 unmount ${vol_arg} > /dev/null 2>&1
+            # get full path to volume data file
+            volume_path=`cat ${data_path}/${vol_arg}.path`
+            busybox rm -f ${volume_path}/${vol_arg}.vol ${data_path}/${vol_arg}.path ${data_path}/${vol_arg}.loop ${data_path}/${vol_arg}.mount.point ${data_path}/${vol_arg}.pre-mount.sh ${data_path}/${vol_arg}.mount.sh ${data_path}/${vol_arg}.pre-unmount.sh ${data_path}/${vol_arg}.unmount.sh
+            echo "Volume deleted: ${vol_arg}"
+        ;;
+        status)
+            echo "Mounted volumes:"
+            echo ""
+            busybox mount | busybox grep "/dev/mapper/" | busybox cut -f 1 -d \  | busybox cut -f 4 -d "/" | busybox sort
+            echo ""
+            echo ""
+            echo "Available volumes:"
+            echo ""
+            busybox ls ${data_path} | busybox grep .path | busybox cut -f 1 -d "." | busybox sort
+        ;;
+        probe)
+            echo -n "Kernel .config has CONFIG_DM_CRYPT: "
+            if [ -e /proc/config.gz ]; then
+                cat /proc/config.gz | gunzip | busybox grep -i CONFIG_DM_CRYPT=y > /dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    echo "Yes"
+                else
+                    echo "No"
+                fi
+            else
+                echo "Skipped"
+            fi
+            echo -n "Checking for /dev/mapper/control: "
+            [ -e /dev/mapper/control ] > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                echo "Yes"
+            else
+                echo "No"
+            fi
+            echo -n "Checking /proc/crypto ciphers: "
+            if [ -e /proc/crypto ]; then
+                a=`cat /proc/crypto | busybox grep cbc | busybox grep name | busybox uniq | busybox cut -f 2 -d : | busybox cut -f 2 -d "(" | busybox tr -d ")" | busybox tr "\n" " "`
+                if ! [ "x${a}" == "x" ]; then
+                    echo $a
+                else
+                    echo "Unknown"
+                fi
+            else
+                echo "Skipped"
+            fi
+            echo -n "Checking for busybox: "
+            busybox > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                echo "Yes"
+            else
+                echo "No"
+            fi
+            echo -n "Checking for losetup: "
+            busybox losetup > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                echo "Yes"
+            else
+                echo "No"
+            fi
+        ;;
+        version)
+            echo "luks bash script ${version}"
+        ;;
+        info)
+            echo "Cipher: ${cipher}"
+            echo "Keysize: ${keysize}"
+            echo "Mount Path: ${defaultmountpath}"
+            echo "Cryptsetup: ${cs}"
+        ;;
+        upgrade)
+            echo "Upgrading pre-2.3 volumes..."
+            cd /mnt/sdcard/luks/.data/
+            # move loopdata
+            busybox mv -f loopdev.count /data/data/com.nemesis2.luksmanager/.data
+            busybox mv -f *.loop /data/data/com.nemesis2.luksmanager/.data
+            # create path files
+            for i in `busybox ls *.vol -1`; do fn=`busybox echo $i | busybox sed -e "s/\.vol//"` && echo "/mnt/sdcard/luks/.data" > /data/data/com.nemesis2.luksmanager/.data/${fn}.path; done
+            # recreate mount point files
+            for i in `busybox ls *.mount.path -1`; do fn=`busybox echo $i | busybox sed -e "s/\.mount\.path//"` && cat $i >  /data/data/com.nemesis2.luksmanager/.data/${fn}.mount.point; done
+            # clean up
+            busybox rm -f *.mount.path
+            # move all mount/unmount scripts
+            busybox mv -f *.sh /data/data/com.nemesis2.luksmanager/.data
+            echo "Done."
+        ;;
+        *)
+            echo "Usage: luks [action] [volume_name]"
+            echo ""
+            echo "  Action: mount unmount unmountall create remove status version info upgrade"
+            echo ""
+            echo "Notes:"
+            echo ""
+            echo "The SD card can not be mounted as a USB Mass Storage device over USB when volumes are are mounted."
+            echo ""
+            echo "Volume names should be a single word, no spaces or echo '.' (periods), dashes are allowed."
+            echo ""
+            echo "Please unmount all volumes before rebooting or powering off the phone."
+esac
+echo ""

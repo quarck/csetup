@@ -1,10 +1,11 @@
 add poweroff button 
 
+add cpu governer set up
+
+add usb mss "disconnect" panes
+
+
 add the 'password under the pressure'
-
-add the info button with the info page
-
-add more handy cmds
 
 add the creation / formatting option
 

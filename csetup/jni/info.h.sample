@@ -1,0 +1,11 @@
+
+const char *info[] = 
+{
+	"Device Owner:",
+	"YourName",
+	"If found, please",
+	"return,",
+	"reward XX EUR.",
+	"e-mail"
+};
+

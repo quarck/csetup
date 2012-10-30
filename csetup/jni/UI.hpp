@@ -827,13 +827,10 @@ public:
 			substrToDisplay = substrToDisplay.substr(len - m_maxChars, m_maxChars);
 		}
 
-		if ( m_drawEdges ) 
-		{
-			m_gc->fill(
-				m_rect, 
-				(m_active && m_invertColorOnActivate) ? m_color.negative() : m_color
-				);
-		}
+		m_gc->fill(
+			m_rect, 
+			(m_active && m_invertColorOnActivate) ? m_color.negative() : m_color
+			);
 
 		Point drawPos ( 
 				m_rect.getOrigin().getX() + m_imgDrawOffset.getX(), 

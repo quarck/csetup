@@ -45,6 +45,7 @@ const char *keyboard_device = "/dev/input/event3";
 const char *fb_device = "/dev/graphics/fb0";
 
 const char *lettersbmp = "/system/csetup/letters.bmp";
+const char *letterssmallbmp = "/system/csetup/letterssmall.bmp";
 
 const char *cryptsetup = "/system/csetup/cryptsetup";
 
@@ -62,10 +63,12 @@ const char *partmainsd = "/dev/block/mmcblk1p7";
 const char *partsdbootdata = "/dev/block/mmcblk1p6";
 const char *partsdbootcache = "/dev/block/mmcblk1p5";
 const char *partsdbootdevlog = "/dev/block/mmcblk1p3"; // using emerg's devlog - use 'emerg' passwd 
+const char *partsdbootsd = "/dev/block/mmcblk1p8"; // using emerg's sd - use 'emerg' passwd
 
 const char *partemergdata = "/dev/block/mmcblk1p2";
 const char *partemergcache = "/dev/block/mmcblk1p1";
 const char *partemergdevlog = "/dev/block/mmcblk1p3";
+const char *partemergsd = "/dev/block/mmcblk1p8";
 
 const char *emergPasswd = "emerg";
 
@@ -130,6 +133,30 @@ bool usbMssExport(const char *device)
 	}
 	
 	return ret;
+}
+
+void echo(const char *str, const char *file)
+{
+	FILE *f = fopen(file, "w");
+	if ( f ) 
+	{
+		fprintf(f, "%s\n", str);
+		fclose(f);
+	}
+}
+
+void tweakCPUandIOSched()
+{
+	echo("384000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq");
+	echo("1728000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq");
+	echo("interactive", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+	
+	echo("384000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq");
+	echo("1728000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq");
+	echo("interactive", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_governor");
+
+	echo("noop", "/sys/devices/platform/msm_sdcc.1/mmc_host/mmc0/mmc0:0001/block/mmcblk0/queue/scheduler");
+	echo("noop", "/sys/devices/platform/msm_sdcc.3/mmc_host/mmc1/mmc1:0001/block/mmcblk1/queue/scheduler");
 }
 
 class UIManager 
@@ -389,9 +416,12 @@ public:
 					bool data = luksOpen(partsdbootdata,  password, "data");
 					bool cache = luksOpen(partsdbootcache,  password, "cache");
 					bool devlog = luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
+				
+					bool sd = luksOpen(partsdbootsd, emergPasswd, "sd");
 
 					if ( data && cache && devlog ) 
 					{
+						tweakCPUandIOSched();
 						m_manager->setShouldQuit();
 					}
 				}
@@ -454,6 +484,7 @@ public:
 					
 					if ( data && cache && devlog ) 
 					{
+						tweakCPUandIOSched();
 						m_manager->setShouldQuit();
 					}
 				}
@@ -463,6 +494,8 @@ public:
 				bool data = luksOpen(partemergdata,  emergPasswd, "data");
 				bool cache = luksOpen(partemergcache,  emergPasswd, "cache");
 				bool devlog = luksOpen(partemergdevlog,  emergPasswd, "devlog");
+					
+				bool sd = luksOpen(partemergsd, emergPasswd, "sd");
 
 				if ( data && cache && devlog ) 
 				{
@@ -538,13 +571,18 @@ int main(int argc, char *argv[])
 
 	Image* letters = bmp::readImage(lettersbmp);
 
+	Image* letterssmall = bmp::readImage(letterssmallbmp);
+
 	ImageRscSet set(letters);
+	ImageRscSet smallFont(letterssmall);
 
 	char chars[] = "QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890-=!@#$%^&*()_+[{]};:'\"\\|,<.>/?`~* ";
 
 	for (int i=0; i<sizeof(chars); i++) 
 	{
 		set.addRes(chars[i], Rect(30*i, 0, 30, 55));
+
+		smallFont.addRes(chars[i], Rect(15*i + 15*2, 0, 15, 30));
 	}
 
 	set.addRes(ID_SHIFT, Rect(2946-5, 0, 41+10, 55));
@@ -635,18 +673,19 @@ int main(int argc, char *argv[])
 			)
 		);
 
-
 	InfoPaneActionButton backToMain(
 			&manager,
 			&mainPane,
 			&fb, 
 			Point(5,15), 
-			Size(30,6), 
+			Size(30,60), 
 			Point(5, 5), 
 			&set, 
-			"<<< back",
+			"<< Back",
 			0
 			);
+
+	backToMain.setDrawEdges(true);
 
 	infoPane.add(&backToMain);
 
@@ -673,4 +712,6 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
+
+
 

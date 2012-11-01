@@ -77,7 +77,7 @@ bool luksOpen(const std::string& dev, const std::string& password, const std::st
 {
 	bool ret = false;
 
-	// popen crashes for now reason (on actually a following fprintf), 
+	// popen crashes for no reason (on actually a following fprintf), 
 	// so using 'old school'
 
 	int pipes[2];
@@ -119,6 +119,109 @@ bool luksOpen(const std::string& dev, const std::string& password, const std::st
 	return ret;
 }
 
+bool luksChangeKey(const std::string& dev, const std::string& oldPassword, const std::string& newPassword)
+{
+	bool ret = false;
+
+	// popen crashes for no reason (on actually a following fprintf), 
+	// so using 'old school'
+
+	int pipes[2];
+
+	pipe(pipes);
+
+	int pid = fork();
+
+	if ( pid == 0 ) 
+	{
+		close(0); // stdin
+		close(pipes[1]);
+		dup2(pipes[0], 0); // duplicate read-end of pipe to stdin
+
+		execl( 	cryptsetup, 
+			cryptsetup, 
+			"luksChangeKey", 
+			dev.c_str(), 
+			NULL
+			);
+		exit(-1);
+	}
+	else
+	{
+		write(pipes[1], oldPassword.c_str(), oldPassword.size());
+		write(pipes[1], "\n", 1);
+		write(pipes[1], newPassword.c_str(), newPassword.size());
+		write(pipes[1], "\n", 1);
+		write(pipes[1], newPassword.c_str(), newPassword.size());
+		write(pipes[1], "\n", 1);
+		close(pipes[1]); 
+
+		int st;
+		pid_t p = waitpid(pid, &st, 0);
+
+		if ( WIFEXITED(st) && WEXITSTATUS(st) == 0 )
+			ret = true;
+
+		close(pipes[0]);
+	}
+
+	return ret;
+}
+
+bool luksFormat(const std::string& dev, const char* keySizeBits, const std::string& newPassword)
+{
+	bool ret = false;
+
+	// popen crashes for no reason (on actually a following fprintf), 
+	// so using 'old school'
+
+	int pipes[2];
+
+	pipe(pipes);
+
+	int pid = fork();
+
+	if ( pid == 0 ) 
+	{
+		close(0); // stdin
+		close(pipes[1]);
+		dup2(pipes[0], 0); // duplicate read-end of pipe to stdin
+
+		execl( 	cryptsetup, 
+			cryptsetup,
+			"--cipher",
+			"aes",
+			"--key-size",
+			keySizeBits,
+			"luksFormat", 
+			dev.c_str(), 
+			NULL
+			);
+		exit(-1);
+	}
+	else
+	{
+		write(pipes[1], "YES\n", 4);
+
+		write(pipes[1], newPassword.c_str(), newPassword.size());
+		write(pipes[1], "\n", 1);
+		write(pipes[1], newPassword.c_str(), newPassword.size());
+		write(pipes[1], "\n", 1);
+		close(pipes[1]); 
+
+		int st;
+		pid_t p = waitpid(pid, &st, 0);
+
+		if ( WIFEXITED(st) && WEXITSTATUS(st) == 0 )
+			ret = true;
+
+		close(pipes[0]);
+	}
+
+	return ret;
+}
+
+
 bool usbMssExport(const char *device)
 {
 	bool ret = false;
@@ -147,6 +250,8 @@ void echo(const char *str, const char *file)
 
 void tweakCPUandIOSched()
 {
+	return ;
+
 	echo("384000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq");
 	echo("1728000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq");
 	echo("interactive", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
@@ -370,6 +475,7 @@ class MainPaneActionButton : public ImageButton
 	UIPane* m_infoPane; 
 	TextEdit* m_edit;
 	int 	m_id;
+	ImageRscSet *m_set;
 
 public:
 	inline MainPaneActionButton(
@@ -386,6 +492,7 @@ public:
 		, m_manager ( manager )
 		, m_edit ( edit )
 		, m_id ( imgResId )
+		, m_set ( rscSet )
 	{
 	}
 
@@ -394,6 +501,18 @@ public:
 		m_infoPane = pane;
 		return this;
 	}
+
+	void welcomeMessage( const std::string& msg)
+	{
+		UIPane* welcomePane = new UIPane();
+
+		welcomePane->add (
+				new TextEdit( gc(), Point(5,100), Size(30,60), Point(5,5), m_set, msg)
+			);
+
+		m_manager->setActivePane ( welcomePane );
+	}
+
 
 	void onTouchUp(const Point& pt)
 	{
@@ -422,6 +541,9 @@ public:
 					if ( data && cache && devlog ) 
 					{
 						tweakCPUandIOSched();
+
+						welcomeMessage("Booting into SD");
+
 						m_manager->setShouldQuit();
 					}
 				}
@@ -472,6 +594,18 @@ public:
 				{
 #warning ("N.I.")
 				}
+				else if ( str == "cmdpasswd" ) 
+				{
+#warning ("N.I.")
+				}
+				else if ( str == "cmdpasswdsdboot" )
+				{
+#warning ("N.I.")
+				}
+				else if ( str == "cmdpasswdemerg" ) 
+				{
+#warning ("N.I.")
+				}
 				else
 				{
 					const std::string& password = str;
@@ -485,6 +619,9 @@ public:
 					if ( data && cache && devlog ) 
 					{
 						tweakCPUandIOSched();
+						
+						welcomeMessage("Welcome");
+
 						m_manager->setShouldQuit();
 					}
 				}
@@ -499,6 +636,8 @@ public:
 
 				if ( data && cache && devlog ) 
 				{
+					welcomeMessage("Starting...");
+
 					m_manager->setShouldQuit();
 				}
 			}
@@ -705,10 +844,8 @@ int main(int argc, char *argv[])
 	manager.onIter();
 
 	manager.run();
-	
-	fb.nextActiveBuffer();
-	fb.fill(rgb(0, 0, 0));
-	fb.switchToActiveBuf();
+
+	manager.onIter(); // draw
 
 	return 0;
 }

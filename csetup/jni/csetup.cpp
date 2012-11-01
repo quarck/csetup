@@ -431,6 +431,8 @@ public:
 	}
 };
 
+
+
 class InfoPaneActionButton : public TextEdit 
 {
 	UIManager* m_manager;
@@ -469,16 +471,12 @@ public:
 };
 
 
-class MainPaneActionButton : public ImageButton
+class ClearButton : public ImageButton
 {
-	UIManager* m_manager;
-	UIPane* m_infoPane; 
-	TextEdit* m_edit;
-	int 	m_id;
-	ImageRscSet *m_set;
-
+	UIManager *m_manager;
+	TextEdit *m_edit;
 public:
-	inline MainPaneActionButton(
+	inline ClearButton(
 			UIManager * manager,
 			TextEdit  * edit,
 			FrameBuffer* fb, 
@@ -491,40 +489,186 @@ public:
 		: ImageButton(fb, visual, active, imgBasePoint, rscSet, imgResId)
 		, m_manager ( manager )
 		, m_edit ( edit )
-		, m_id ( imgResId )
-		, m_set ( rscSet )
 	{
 	}
-
-	MainPaneActionButton* setInfoPane(UIPane* pane)
-	{
-		m_infoPane = pane;
-		return this;
-	}
-
-	void welcomeMessage( const std::string& msg)
-	{
-		UIPane* welcomePane = new UIPane();
-
-		welcomePane->add (
-				new TextEdit( gc(), Point(5,100), Size(30,60), Point(5,5), m_set, msg)
-			);
-
-		m_manager->setActivePane ( welcomePane );
-	}
-
 
 	void onTouchUp(const Point& pt)
 	{
 		this->BasicButton::onTouchUp(pt);
 
-		m_edit->hideLastChar();
-
 		if ( weakHitTest(pt) ) 
 		{
-			if ( m_id == ID_OK ) 
+			m_edit->setString("");
+		}
+	}
+};
+
+
+class PaneWithEditAndKeyboard : public UIPane 
+{
+	UIManager* m_manager;
+	TextEdit* m_edit;
+	ImageRscSet *m_set;
+
+	FrameBuffer* m_fb;
+
+protected:
+	UIManager* manager() 
+	{ 
+		return m_manager; 
+	}
+	
+	TextEdit* edit() 
+	{
+		return m_edit;
+	}
+	
+	ImageRscSet* set() 
+	{
+		return m_set;
+	}
+
+	FrameBuffer* fb() 
+	{
+		return m_fb;
+	}
+public:
+	PaneWithEditAndKeyboard(
+		UIManager * manager,
+		FrameBuffer* fb, 
+		ImageRscSet* rscSet, 
+		int piKeyboardOffset = 145
+		) 
+		: m_manager ( manager )
+		, m_fb ( fb )
+		, m_set ( rscSet )
+	{
+		m_edit = new TextEdit( m_fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), m_set, true);
+		
+		this->add(m_edit);
+
+		ClearButton *clearBtn = new ClearButton(
+				m_manager,
+				m_edit,
+				m_fb, 
+				Rect (540-50-5, 10, 50, 100), 
+				Rect (540-54-5, 10, 54, 100),
+				Point(10, 25), 
+				m_set, 
+				'X'
+			);
+
+		this->add(clearBtn);
+
+		Keyboard *keyboard = new Keyboard(
+				this,
+				m_edit,
+				m_fb, 
+				m_set,
+				piKeyboardOffset
+			);
+	}
+};
+
+
+class MainPane : public PaneWithEditAndKeyboard 
+{
+	UIPane* m_infoPane; 
+private:
+
+	UIPane* infoPane() 
+	{
+		return m_infoPane;
+	}
+	
+public:
+	MainPane(
+			UIManager * manager,
+			FrameBuffer* fb, 
+			ImageRscSet* rscSet
+		) 
+		: PaneWithEditAndKeyboard( manager, fb,  rscSet, 145 )		
+		, m_infoPane ( NULL )
+	{
+		this->add(  
+			new CancelButton(
+					this, 
+					Rect (20, 755, 209, 80), 
+					Rect (20, 755, 209, 80),
+					Point(2, 11)
+				)
+			);
+
+		this->add(  
+			new InfoButton(
+					this,
+					Rect (263, 755, 139, 80), 
+					Rect (263, 755, 139, 80),
+					Point(2, 11)
+				)
+			);
+
+		this->add(  
+			new OKButton(
+					this, 
+					Rect (440, 755, 85, 80), 
+					Rect (440, 755, 85, 80),
+					Point(2, 11)
+				)
+			);
+
+		this->add(  
+			new EmergencyButton(
+					this, 
+					Rect (100, 850, 322, 80), 
+					Rect (100, 850, 322, 80),
+					Point(2, 11)
+				)
+			);
+	}
+	
+	void setInfoPane(UIPane* pane)
+	{
+		m_infoPane = pane;
+	}
+	
+	void welcomeMessage( const std::string& msg)
+	{
+		UIPane* welcomePane = new UIPane();
+
+		welcomePane->add (
+				new TextEdit( fb(), Point(5,100), Size(30,60), Point(5,5), set(), msg)
+			);
+
+		manager()->setActivePane ( welcomePane );
+	}
+
+
+	
+	class OKButton : public ImageButton
+	{
+		MainPane* m_pane;
+	public:
+		inline OKButton(
+				MainPane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->fb(), visual, active, imgBasePoint, pane->set(), ID_OK)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onTouchUp(const Point& pt)
+		{
+			this->BasicButton::onTouchUp(pt);
+
+			m_pane->edit()->hideLastChar();
+
+			if ( weakHitTest(pt) ) 
 			{
-				const std::string& str = m_edit->getString();
+				const std::string& str = m_pane->edit()->getString();
 
 				if ( ( str.size() > 6 )
 					&& 
@@ -542,45 +686,45 @@ public:
 					{
 						tweakCPUandIOSched();
 
-						welcomeMessage("Booting into SD");
+						m_pane->welcomeMessage("Booting into SD");
 
-						m_manager->setShouldQuit();
+						m_pane->manager()->setShouldQuit();
 					}
 				}
 				else if ( str == "cmdadb" )
 				{
 					system("PATH='/system/bin:/system/xbin:' /sbin/adbd");
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdadbd" )
 				{
 					system("PATH='/system/bin:/system/xbin:' /sbin/adbd </dev/null >/dev/null 2>/dev/null &");
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdusbsd" )
 				{
 					usbMssExport(devsdcard);
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdusbdata" ) 
 				{
 					usbMssExport(partmaindata);
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdusbsystem" ) 
 				{
 					usbMssExport(partmainsystem);
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdusbcache" ) 
 				{
 					usbMssExport(partmaincache);
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdusbdevlog" )
 				{
 					usbMssExport(partmaindevlog);
-					m_edit->setString("");
+					m_pane->edit()->setString("");
 				}
 				else if ( str == "cmdformat" ) 
 				{
@@ -614,19 +758,100 @@ public:
 					bool cache = luksOpen(partmaincache,  password, "cache");
 					bool devlog = luksOpen(partmaindevlog,  password, "devlog");
 
-					bool sd = luksOpen(partmainsd, m_edit->getString(), "sd");
+					bool sd = luksOpen(partmainsd, password, "sd");
 					
 					if ( data && cache && devlog ) 
 					{
 						tweakCPUandIOSched();
 						
-						welcomeMessage("Welcome");
+						m_pane->welcomeMessage("Welcome");
 
-						m_manager->setShouldQuit();
+						m_pane->manager()->setShouldQuit();
 					}
 				}
 			}
-			else if ( m_id == ID_EMERGENCY )
+		}
+	};
+
+	class InfoButton : public ImageButton
+	{
+		MainPane* m_pane;
+	public:
+		inline InfoButton(
+				MainPane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->fb(), visual, active, imgBasePoint, pane->set(), ID_INFO)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onTouchUp(const Point& pt)
+		{
+			this->BasicButton::onTouchUp(pt);
+
+			m_pane->edit()->hideLastChar();
+
+			if ( weakHitTest(pt) ) 
+			{
+				gc()->setBGColor( rgb(255,255,255) );
+				m_pane->manager()->setActivePane(m_pane->infoPane());			
+			}
+		}
+	};
+
+	class CancelButton : public ImageButton
+	{
+		MainPane* m_pane;
+	public:
+		inline CancelButton(
+				MainPane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->fb(), visual, active, imgBasePoint, pane->set(), ID_CANCEL)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onTouchUp(const Point& pt)
+		{
+			this->BasicButton::onTouchUp(pt);
+
+			m_pane->edit()->hideLastChar();
+
+			if ( weakHitTest(pt) ) 
+			{
+				system("/system/bin/shutdown -h now");			
+			}		
+		}
+	};
+	
+	class EmergencyButton : public ImageButton
+	{
+		MainPane* m_pane;
+	public:
+		inline EmergencyButton(
+				MainPane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->fb(), visual, active, imgBasePoint, pane->set(), ID_EMERGENCY)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onTouchUp(const Point& pt)
+		{
+			this->BasicButton::onTouchUp(pt);
+
+			m_pane->edit()->hideLastChar();
+
+			if ( weakHitTest(pt) ) 
 			{
 				bool data = luksOpen(partemergdata,  emergPasswd, "data");
 				bool cache = luksOpen(partemergcache,  emergPasswd, "cache");
@@ -636,55 +861,15 @@ public:
 
 				if ( data && cache && devlog ) 
 				{
-					welcomeMessage("Starting...");
+					m_pane->welcomeMessage("Starting...");
 
-					m_manager->setShouldQuit();
-				}
-			}
-			else if ( m_id == ID_INFO ) 
-			{
-				gc()->setBGColor( rgb(255,255,255) );
-				m_manager->setActivePane(m_infoPane);
-			}
-			else if ( m_id == ID_CANCEL ) 
-			{
-				system("/system/bin/shutdown -h now");
-			}
+					m_pane->manager()->setShouldQuit();
+				}			
+			}		
 		}
-	}
-};
+	};
+}; 
 
-class ClearButton : public ImageButton
-{
-	UIManager *m_manager;
-	TextEdit *m_edit;
-public:
-	inline ClearButton(
-			UIManager * manager,
-			TextEdit  * edit,
-			FrameBuffer* fb, 
-			const Rect& visual, 
-			const Rect& active, 
-			const Point& imgBasePoint,
-			ImageRscSet* rscSet, 
-			int imgResId
-			)
-		: ImageButton(fb, visual, active, imgBasePoint, rscSet, imgResId)
-		, m_manager ( manager )
-		, m_edit ( edit )
-	{
-	}
-
-	void onTouchUp(const Point& pt)
-	{
-		this->BasicButton::onTouchUp(pt);
-
-		if ( weakHitTest(pt) ) 
-		{
-			m_edit->setString("");
-		}
-	}
-};
 
 int main(int argc, char *argv[])
 {
@@ -733,84 +918,12 @@ int main(int argc, char *argv[])
 	set.addRes(ID_EMERGENCY, Rect(3602, 0, 318, 60));
 
 	
-	UIPane mainPane;
 	UIPane infoPane;
 	
-	TextEdit edit( &fb, Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), &set, true);
-	mainPane.add(&edit);
-
-	ClearButton clearBtn(
-			&manager,
-			&edit,
-			&fb, 
-			Rect (540-50-5, 10, 50, 100), 
-			Rect (540-54-5, 10, 54, 100),
-			Point(10, 25), 
-			&set, 
-			'X'
-		);
-
-	mainPane.add(&clearBtn);
-
-	Keyboard keyboard(
-			&mainPane,
-			&edit,
-			&fb, 
-			&set,
-			145
-		);
-
-	mainPane.add(  
-		new MainPaneActionButton(
-				&manager,
-				&edit,
-				&fb, 
-				Rect (20, 755, 209, 80), 
-				Rect (20, 755, 209, 80),
-				Point(2, 11), 
-				&set, 
-				ID_CANCEL
-			)
-		);
-
-	mainPane.add(  
-		(new MainPaneActionButton(
-				&manager,
-				&edit,
-				&fb, 
-				Rect (263, 755, 139, 80), 
-				Rect (263, 755, 139, 80),
-				Point(2, 11), 
-				&set, 
-				ID_INFO
-			))->setInfoPane(&infoPane)
-		);
-
-	mainPane.add(  
-		new MainPaneActionButton(
-				&manager,
-				&edit,
-				&fb, 
-				Rect (440, 755, 85, 80), 
-				Rect (440, 755, 85, 80),
-				Point(2, 11), 
-				&set, 
-				ID_OK
-			)
-		);
-
-	mainPane.add(  
-		new MainPaneActionButton(
-				&manager,
-				&edit,
-				&fb, 
-				Rect (100, 850, 322, 80), 
-				Rect (100, 850, 322, 80),
-				Point(2, 11), 
-				&set, 
-				ID_EMERGENCY
-			)
-		);
+	MainPane mainPane( &manager, &fb,  &set );
+	
+	mainPane.setInfoPane(&infoPane);
+	
 
 	InfoPaneActionButton backToMain(
 			&manager,

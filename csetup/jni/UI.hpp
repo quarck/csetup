@@ -294,10 +294,6 @@ public:
 	}
 };
 
-class UIPane : public WidgetsCollection
-{
-};
-
 class IGraphics
 {
 public:
@@ -413,10 +409,19 @@ public:
 	{
 		m_gc->invalidate();
 		m_active = false;
+		
+		if ( weakHitTest(pt) ) 
+		{
+			this->onBtnClick();
+		}
 	}
 	
 	// update on touch coord
 	void onTouchUpdate(const Point& pt)
+	{
+	}
+	
+	virtual void onBtnClick()
 	{
 	}
 };
@@ -888,6 +893,56 @@ public:
 		return m_string;
 	}
 };
+
+class UIManager;
+
+class UIPane : public WidgetsCollection
+{
+	UIManager* m_manager;
+
+	ImageRscSet *m_set;
+
+	IGraphics* m_gc;
+
+protected:
+	UIManager* manager() 
+	{
+		return m_manager; 
+	}
+	
+	ImageRscSet* set() 
+	{
+		return m_set;
+	}
+
+	IGraphics* gc() 
+	{
+		return m_gc;
+	}
+	
+public:
+	UIPane ( 
+		UIManager* manager,
+		ImageRscSet* set,
+		IGraphics* gc
+	)
+		: m_manager ( manager )
+		, m_set ( set ) 
+		, m_gc ( gc ) 
+	{
+	}
+	
+public:
+	virtual void onActivated()
+	{
+	}
+	
+public: 
+	virtual void onDeactivated()
+	{
+	}
+};
+
 
 
 #endif

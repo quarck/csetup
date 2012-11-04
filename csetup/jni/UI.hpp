@@ -813,9 +813,21 @@ public:
 	void onTouchUp(const Point& pt)
 	{
 		m_active = false;
+			
+		m_gc->invalidate();
+		
+		if ( weakHitTest(pt) ) 
+		{
+			this->onBtnClick();
+		}
 	}
 	
+	// update on touch coord
 	void onTouchUpdate(const Point& pt)
+	{
+	}
+
+	virtual void onBtnClick()
 	{
 	}
 

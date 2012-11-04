@@ -7,7 +7,4 @@ add usb mss "disconnect" panes
 
 add the 'password under the pressure'
 
-add the creation / formatting option
-
-add the nicer look, more advanced UI library code, etc.
 

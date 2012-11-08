@@ -28,6 +28,7 @@ const char *partsdbootdata = "/dev/block/mmcblk1p6";
 const char *partsdbootcache = "/dev/block/mmcblk1p5";
 const char *partsdbootdevlog = "/dev/block/mmcblk1p3"; // using emerg's devlog - use 'emerg' passwd 
 const char *partsdbootsd = "/dev/block/mmcblk1p8"; // using emerg's sd - use 'emerg' passwd
+const char *partsdbootsystem = "/dev/block/mmcblk1p9";
 
 const char *partemergdata = "/dev/block/mmcblk1p2";
 const char *partemergcache = "/dev/block/mmcblk1p1";

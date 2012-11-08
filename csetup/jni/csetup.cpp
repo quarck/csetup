@@ -19,10 +19,12 @@
 
 #include <sys/select.h>
 
+#include "debuglog.h"
+
 #include "input.h"
 
 #include <list>
-
+#include <vector>
 
 #include "config.h"
 
@@ -50,25 +52,30 @@
 
 #include "resources.hpp"
 
+#include "securityKey.hpp"
+
 class InfoPane : public UIPane 
 {
-	UIPane* m_mainPane; 
+	UIPane* m_prevPane; 
 
 protected:	
-	UIPane* mainPane() 
+	UIPane* prevPane() 
 	{
-		return m_mainPane;
+		return m_prevPane;
 	}
 	
 public:
 	InfoPane(
 			UIManager * manager,
-			FrameBuffer* fb, 
+			IGraphics * gc, 
 			ImageRscSet* rscSet, 
-			UIPane* mainPane
+			UIPane* prevPane, 
+			const char** lines, 
+			int numLines, 
+			const std::string backCaption = "<< Back"
 		) 
-		: UIPane ( manager, rscSet, fb )	
-		, m_mainPane ( mainPane )
+		: UIPane ( manager, rscSet, gc )	
+		, m_prevPane ( prevPane )
 	{
 
 		BackButton *backToMain = new BackButton(
@@ -77,19 +84,17 @@ public:
 				Size(30,60), 
 				Point(5, 5), 
 				set(), 
-				"<< Back"
+				backCaption
 			);
 
 		backToMain->setDrawEdges(true);
 
 		this->add(backToMain);
 
-#include "info.h"
-
-		for (int i=0; i<sizeof(info)/sizeof(info[0]); i++)
+		for (int i=0; i<numLines; i++)
 		{
 			this->add(
-				new TextEdit( gc(), Point(5,70*i+100), Size(30,60), Point(5,5), set(), info[i])
+				new TextEdit( gc, Point(5,70*i+100), Size(30,60), Point(5,5), set(), lines[i])
 			);
 		}
 	}
@@ -119,7 +124,7 @@ public:
 
 		void onBtnClick()
 		{
-			m_pane->manager()->setActivePane( m_pane->mainPane() );
+			m_pane->manager()->setActivePane( m_pane->prevPane() );
 		}
 	};
 };
@@ -137,7 +142,7 @@ protected:
 public:
 	PaneWithEditAndKeyboard(
 		UIManager * manager,
-		FrameBuffer* fb, 
+		IGraphics* fb, 
 		ImageRscSet* rscSet, 
 		int piKeyboardOffset
 		) 
@@ -197,6 +202,501 @@ public:
 	};
 
 };
+
+class FormatPane : public PaneWithEditAndKeyboard 
+{
+	UIPane* m_prevPane; 
+
+	TextEdit * m_label;
+
+	bool m_bKeyOK;
+	std::string m_newPassword;
+	std::string m_newPasswordConfirmation;
+
+	std::string m_dataDevice;
+	std::string m_cacheDevice;
+	std::string m_devlogDevice;
+	std::string m_sdDevice;
+
+	std::string m_strDataKeySize;
+
+protected:	
+	UIPane* prevPane() 
+	{
+		return m_prevPane;
+	}
+
+public:
+	void setPassword(const std::string& pass)
+	{
+		m_newPassword = pass;
+		m_newPasswordConfirmation = pass;
+	}
+
+	FormatPane(
+			UIManager * manager,
+			IGraphics* fb, 
+			ImageRscSet* rscSet,
+			UIPane* prevPane,
+			const std::string& dataDevice,
+			const std::string& cacheDevice,
+			const std::string& devlogDevice,
+			const std::string& sdDevice,
+			const std::string& strKeySize
+		) 
+		: PaneWithEditAndKeyboard( manager, fb,  rscSet, 90 )		
+		, m_prevPane ( prevPane )
+		, m_dataDevice ( dataDevice ) 
+		, m_cacheDevice ( cacheDevice ) 
+		, m_devlogDevice ( devlogDevice ) 
+		, m_sdDevice ( sdDevice )
+		, m_strDataKeySize ( strKeySize )
+		, m_bKeyOK ( false )
+	{
+
+		m_label = new TextEdit( fb, Rect(5, 110, 540-5, 80), Size(30, 60), Point(10,10), set(), false);
+
+		m_label->setString("Security Key");
+
+		this->add(m_label);
+
+		this->add(  
+			new CancelButton(
+					this, 
+					Rect (20, 755+90, 209, 80), 
+					Rect (20, 755+90, 209, 80),
+					Point(2, 11)
+				)
+			);
+
+		this->add(  
+			new OKButton(
+					this, 
+					Rect (440, 755+90, 85, 80), 
+					Rect (440, 755+90, 85, 80),
+					Point(2, 11)
+				)
+			);
+	}
+	
+	void resultMessage( const std::string& line1, const std::string& line2 = "", const std::string& line3="")
+	{
+		std::vector<const char*> lines;
+		
+		lines.push_back(line1.c_str());
+		lines.push_back(line2.c_str());
+		lines.push_back(line3.c_str());
+
+		resultMessage(lines);
+	}
+	
+	void resultMessage( std::vector<const char*> lines)
+	{
+		InfoPane* ip = new InfoPane(
+			manager(),
+			gc(), 
+			set(), 
+			prevPane(), 
+			&lines[0], 
+			lines.size(), 
+			"OK"
+		); 
+
+		manager()->setActivePane ( ip );
+	}
+
+
+
+	
+	class OKButton : public ImageButton
+	{
+		FormatPane * m_pane;
+	public:
+		inline OKButton(
+				FormatPane * pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->gc(), visual, active, imgBasePoint, pane->set(), ID_OK)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onTouchUp(const Point& pt)
+		{
+			this->BasicButton::onTouchUp(pt);
+
+			m_pane->edit()->hideLastChar();
+			
+		}
+		
+		void onBtnClick()
+		{
+			const std::string& str = m_pane->edit()->getString();
+
+			if ( !m_pane->m_bKeyOK ) 
+			{
+				if ( str != securityKey ) 
+				{
+					m_pane->resultMessage("Invalid");
+					return;
+				}
+				else
+				{
+					m_pane->m_label->setString("New Password");
+					m_pane->edit()->setString("");
+					gc()->invalidate();
+				}
+
+				m_pane->m_bKeyOK = true;
+			}
+			else if ( m_pane->m_newPassword == "" ) 
+			{
+				m_pane->m_newPassword = str;
+				m_pane->m_label->setString("Confirm Passwd");
+				m_pane->edit()->setString("");
+				gc()->invalidate();
+			}
+			else if ( m_pane->m_newPasswordConfirmation == "" ) 
+			{
+				m_pane->m_newPasswordConfirmation = str;
+			}
+
+			if ( m_pane->m_bKeyOK && m_pane->m_newPassword != "" && m_pane->m_newPasswordConfirmation != "" )
+			{
+				if ( m_pane->m_newPassword != m_pane->m_newPasswordConfirmation ) 
+				{
+					m_pane->resultMessage("Passphrases", "do not match.");
+					return;
+				}
+				
+				std::vector<const char*> report;
+
+				if ( volFormat( m_pane->m_dataDevice, m_pane->m_strDataKeySize.c_str(), m_pane->m_newPassword , "fmt-data" ) ) 
+				{
+					report.push_back("Data: OK");
+				}
+				else
+				{
+					report.push_back("Data: FAIL!");
+				}
+				
+				if ( m_pane->m_sdDevice != "" ) 
+				{
+					if ( volFormat( m_pane->m_sdDevice, m_pane->m_strDataKeySize.c_str(), m_pane->m_newPassword, "fmt-sd" ) ) 
+					{
+						report.push_back("SD: OK");
+					}
+					else
+					{
+						report.push_back("SD: FAIL!");
+					}
+				}
+
+
+				if ( m_pane->m_cacheDevice != "" ) 
+				{
+					if ( volFormat( m_pane->m_cacheDevice, "128", m_pane->m_newPassword, "fmt-cache") ) 
+					{
+						report.push_back("Cache: OK");
+					}
+					else
+					{
+						report.push_back("Cache: FAIL!");
+					}
+				}
+
+				if ( m_pane->m_devlogDevice != "" ) 
+				{
+					if ( volFormat( m_pane->m_devlogDevice, "128", m_pane->m_newPassword, "fmt-devlog") ) 
+					{
+						report.push_back("Devlog: OK");
+					}
+					else
+					{
+						report.push_back("Devlog: FAIL!");
+					}
+				}
+
+				m_pane->resultMessage ( report );
+			}
+		}
+	};
+
+	class CancelButton : public ImageButton
+	{
+		FormatPane* m_pane;
+	public:
+		inline CancelButton(
+				FormatPane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->gc(), visual, active, imgBasePoint, pane->set(), ID_CANCEL)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onBtnClick()
+		{
+			m_pane->manager()->setActivePane( 
+				m_pane->prevPane() 
+			);
+		}		
+	};
+}; 
+
+
+
+class PasswordChangePane : public PaneWithEditAndKeyboard 
+{
+	UIPane* m_prevPane; 
+
+	TextEdit * m_label;
+
+	std::string m_oldPassword;
+	std::string m_newPassword;
+	std::string m_newPasswordConfirmation;
+
+	std::string m_dataDevice;
+	std::string m_cacheDevice;
+	std::string m_devlogDevice;
+	std::string m_sdDevice;
+
+protected:	
+	UIPane* prevPane() 
+	{
+		return m_prevPane;
+	}
+
+public:
+	PasswordChangePane(
+			UIManager * manager,
+			IGraphics* fb, 
+			ImageRscSet* rscSet,
+			UIPane* prevPane,
+			const std::string& dataDevice,
+			const std::string& cacheDevice,
+			const std::string& devlogDevice,
+			const std::string& sdDevice
+		) 
+		: PaneWithEditAndKeyboard( manager, fb,  rscSet, 90 )		
+		, m_prevPane ( prevPane )
+		, m_dataDevice ( dataDevice ) 
+		, m_cacheDevice ( cacheDevice ) 
+		, m_devlogDevice ( devlogDevice ) 
+		, m_sdDevice ( sdDevice )
+	{
+
+		m_label = new TextEdit( fb, Rect(5, 110, 540-5, 80), Size(30, 60), Point(10,10), set(), false);
+
+		m_label->setString("Current Pwd");
+
+		this->add(m_label);
+
+		this->add(  
+			new CancelButton(
+					this, 
+					Rect (20, 755+90, 209, 80), 
+					Rect (20, 755+90, 209, 80),
+					Point(2, 11)
+				)
+			);
+
+		this->add(  
+			new OKButton(
+					this, 
+					Rect (440, 755+90, 85, 80), 
+					Rect (440, 755+90, 85, 80),
+					Point(2, 11)
+				)
+			);
+	}
+	
+	void resultMessage( const std::string& line1, const std::string& line2 = "", const std::string& line3="")
+	{
+		std::vector<const char*> lines;
+		
+		lines.push_back(line1.c_str());
+		lines.push_back(line2.c_str());
+		lines.push_back(line3.c_str());
+
+		resultMessage(lines);
+	}
+	
+	void resultMessage( std::vector<const char*> lines)
+	{
+		InfoPane* ip = new InfoPane(
+			manager(),
+			gc(), 
+			set(), 
+			prevPane(), 
+			&lines[0], 
+			lines.size(), 
+			"OK"
+		); 
+
+		manager()->setActivePane ( ip );
+	}
+
+	void onActivated()
+	{
+		this->PaneWithEditAndKeyboard::onActivated();
+	}	
+
+	
+	class OKButton : public ImageButton
+	{
+		PasswordChangePane* m_pane;
+	public:
+		inline OKButton(
+				PasswordChangePane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->gc(), visual, active, imgBasePoint, pane->set(), ID_OK)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onTouchUp(const Point& pt)
+		{
+			this->BasicButton::onTouchUp(pt);
+
+			m_pane->edit()->hideLastChar();
+			
+		}
+		
+		void onBtnClick()
+		{
+			const std::string& str = m_pane->edit()->getString();
+
+			if ( m_pane->m_oldPassword == "" ) 
+			{
+				m_pane->m_oldPassword = str;
+				m_pane->m_label->setString("New Password");
+				m_pane->edit()->setString("");
+				gc()->invalidate();
+			}
+			else if ( m_pane->m_newPassword == "" ) 
+			{
+				m_pane->m_newPassword = str;
+				m_pane->m_label->setString("Confirm Passwd");
+				m_pane->edit()->setString("");
+				gc()->invalidate();
+			}
+			else if ( m_pane->m_newPasswordConfirmation == "" ) 
+			{
+				m_pane->m_newPasswordConfirmation = str;
+
+				if ( m_pane->m_newPassword != m_pane->m_newPasswordConfirmation ) 
+				{
+					m_pane->resultMessage("Passphrases", "do not match.");
+					return;
+				}
+
+				if ( luksChangeKey ( m_pane->m_dataDevice, m_pane->m_oldPassword, m_pane->m_newPassword ) ) 
+				{
+					std::vector<const char*> report;
+
+					report.push_back("Data: OK");
+
+					if ( m_pane->m_sdDevice != "" ) 
+					{
+						if ( luksChangeKey ( m_pane->m_sdDevice, m_pane->m_oldPassword, m_pane->m_newPassword ) ) 
+						{
+							report.push_back("SD: OK");
+						}
+						else
+						{
+							report.push_back("SD: FAIL!");
+						}
+					}
+
+
+					if ( m_pane->m_cacheDevice != "" ) 
+					{
+						if ( luksChangeKey ( m_pane->m_cacheDevice, m_pane->m_oldPassword, m_pane->m_newPassword ) )
+						{
+							report.push_back("Cache: OK");
+						}
+						else 
+						{
+							report.push_back("Cache: FAIL!");
+							// it always assumed that cache and devlog are always safe to 
+							// re-format - they should not contain any kind of user 
+							// or system data that can not be restored
+							if ( volFormat( m_pane->m_cacheDevice, "128", m_pane->m_newPassword, "fmt-cache") ) 
+							{
+								report.push_back("Cache: FMTD");
+							}
+							else
+							{
+								report.push_back("Cache: FMT FAIL!");
+							}
+						}
+					}
+
+					if ( m_pane->m_devlogDevice != "" ) 
+					{
+						if ( luksChangeKey ( m_pane->m_devlogDevice, m_pane->m_oldPassword, m_pane->m_newPassword ) )
+						{
+							report.push_back("Devlog: OK");
+						}
+						else 
+						{
+							report.push_back("Devlog: FAILED!");
+							// it always assumed that cache and devlog are always safe to 
+							// re-format - they should not contain any kind of user 
+							// or system data that can not be restored
+							if ( volFormat( m_pane->m_devlogDevice, "128", m_pane->m_newPassword, "fmt-devlog") ) 
+							{
+								report.push_back("Devlog: FMTD");
+							}
+							else
+							{
+								report.push_back("Devlog: FMT FAIL!");
+							}
+						}
+					}
+
+					m_pane->resultMessage ( report );
+				}
+				else
+				{
+					m_pane->resultMessage("Data: FAIL!");
+				}
+			}
+		}
+	};
+
+	class CancelButton : public ImageButton
+	{
+		PasswordChangePane* m_pane;
+	public:
+		inline CancelButton(
+				PasswordChangePane* pane,
+				const Rect& visual, 
+				const Rect& active, 
+				const Point& imgBasePoint
+				)
+			: ImageButton( pane->gc(), visual, active, imgBasePoint, pane->set(), ID_CANCEL)
+			, m_pane ( pane )
+		{
+		}
+		
+		void onBtnClick()
+		{
+			m_pane->manager()->setActivePane( 
+				m_pane->prevPane() 
+			);
+		}		
+	};
+}; 
+
 
 
 class MainPane : public PaneWithEditAndKeyboard 
@@ -271,6 +771,10 @@ public:
 		manager()->setActivePane ( welcomePane );
 	}
 
+	void onActivated()
+	{
+		this->PaneWithEditAndKeyboard::onActivated();
+	}
 
 	
 	class OKButton : public ImageButton
@@ -307,10 +811,10 @@ public:
 				std::string password = str.substr(6);
 
 				bool data = luksOpen(partsdbootdata,  password, "data");
-				bool cache = luksOpen(partsdbootcache,  password, "cache");
-				bool devlog = luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
+				bool cache = data && luksOpen(partsdbootcache,  password, "cache");
+				bool devlog = data && luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
 			
-				bool sd = luksOpen(partsdbootsd, emergPasswd, "sd");
+				bool sd = data && luksOpen(partsdbootsd, emergPasswd, "sd");
 
 				if ( data && cache && devlog ) 
 				{
@@ -321,14 +825,45 @@ public:
 					m_pane->manager()->setShouldQuit();
 				}
 			}
+			if ( ( str.size() > 7 )
+				&& 
+			     ( str.substr(0,7) == "ssdboot" ) )
+			{
+				std::string password = str.substr(6);
+
+				bool data = luksOpen(partsdbootdata,  password, "data");
+				bool cache = data && luksOpen(partsdbootcache,  password, "cache");
+				bool devlog = data && luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
+			
+				bool sd = data && luksOpen(partmainsd, password, "sd");
+
+				if ( data && cache && devlog ) 
+				{
+					std::string cmd = std::string("mount -t ext4 -r ") + partsdbootsystem + " /system";
+
+					if ( system(cmd.c_str()) == 0 ) 
+					{
+						tweakCPUandIOSched();
+
+						m_pane->welcomeMessage("Booting into SD");
+
+						m_pane->manager()->setShouldQuit();
+					}
+				}
+			}
 			else if ( str == "cmdadb" )
 			{
-				system("PATH='/system/bin:/system/xbin:' /sbin/adbd");
+				system("PATH='/system/bin:/system/xbin:/system/csetup:' /sbin/adbd");
+				m_pane->edit()->setString("");
+			}
+			else if ( str == "cmdadb2" )
+			{
+				system("/sbin/adbd");
 				m_pane->edit()->setString("");
 			}
 			else if ( str == "cmdadbd" )
 			{
-				system("PATH='/system/bin:/system/xbin:' /sbin/adbd </dev/null >/dev/null 2>/dev/null &");
+				system("PATH='/system/bin:/system/xbin:/system/csetup:' /sbin/adbd </dev/null >/dev/null 2>/dev/null &");
 				m_pane->edit()->setString("");
 			}
 			else if ( str == "cmdusbsd" )
@@ -358,37 +893,106 @@ public:
 			}
 			else if ( str == "cmdformat" ) 
 			{
-#warning ("N.I.")
+				m_pane->edit()->setString("");
+
+				FormatPane *pane = new FormatPane(
+					m_pane->manager(), 
+					m_pane->gc(), 
+					m_pane->set(), 
+					m_pane,
+					partmaindata,
+					partmaincache,
+					partmaindevlog,
+					"",
+					"128"	
+					);
+				
+				m_pane->manager()->setActivePane ( pane );
+
 			}
 			else if ( str == "cmdformatsdboot" )
 			{
-#warning ("N.I.")
+				m_pane->edit()->setString("");
+
+				FormatPane *pane = new FormatPane(
+					m_pane->manager(), 
+					m_pane->gc(), 
+					m_pane->set(), 
+					m_pane,
+					partsdbootdata,
+					partsdbootcache,
+					"",
+					"",
+					"128"	
+					);
+				
+				m_pane->manager()->setActivePane ( pane );
 			}
 			else if ( str == "cmdformatemerg" ) 
 			{
-#warning ("N.I.")
+				m_pane->edit()->setString("");
+
+				FormatPane *pane = new FormatPane(
+					m_pane->manager(), 
+					m_pane->gc(), 
+					m_pane->set(), 
+					m_pane,
+					partemergdata,
+					partemergcache,
+					partemergdevlog,
+					partemergsd,
+					"128"	
+					);
+
+				pane->setPassword(emergPasswd);
+				
+				m_pane->manager()->setActivePane ( pane );
+
 			}
 			else if ( str == "cmdpasswd" ) 
 			{
-#warning ("N.I.")
+				m_pane->edit()->setString("");
+
+				PasswordChangePane *passwd = new PasswordChangePane(
+						m_pane->manager(),
+						m_pane->gc(),
+						m_pane->set(),
+						m_pane,
+						partmaindata,
+						partmaincache,
+						partmaindevlog,
+						partmainsd	
+					);
+				
+				m_pane->manager()->setActivePane ( passwd );
+
 			}
 			else if ( str == "cmdpasswdsdboot" )
 			{
-#warning ("N.I.")
-			}
-			else if ( str == "cmdpasswdemerg" ) 
-			{
-#warning ("N.I.")
+				m_pane->edit()->setString("");
+
+				PasswordChangePane *passwd = new PasswordChangePane(
+						m_pane->manager(),
+						m_pane->gc(),
+						m_pane->set(),
+						m_pane,
+						partsdbootdata,
+						partsdbootcache,
+						"",
+						""	
+					);
+				
+				m_pane->manager()->setActivePane ( passwd );
 			}
 			else
 			{
 				const std::string& password = str;
 
 				bool data = luksOpen(partmaindata,  password, "data");
-				bool cache = luksOpen(partmaincache,  password, "cache");
-				bool devlog = luksOpen(partmaindevlog,  password, "devlog");
+				bool cache = data && luksOpen(partmaincache,  password, "cache");
+				bool devlog = data && luksOpen(partmaindevlog,  password, "devlog");
 
-				bool sd = luksOpen(partmainsd, password, "sd");
+				bool sd = data && luksOpen(partmainsd, password, "sd");
 				
 				if ( data && cache && devlog ) 
 				{
@@ -456,6 +1060,7 @@ public:
 		void onBtnClick()
 		{
 			system("/system/bin/shutdown -h now");			
+			system("/system/xbin/poweroff");			
 		}		
 	};
 	
@@ -502,6 +1107,8 @@ public:
 
 int main(int argc, char *argv[])
 {
+	CPUStartupSetup();
+
 	//
 	// open FB dev
 	//
@@ -556,12 +1163,16 @@ int main(int argc, char *argv[])
 		&fb,  
 		&set 
 	);
-	
+
+#include "info.h"
+
 	InfoPane infoPane( 
 		&manager, 
 		&fb,  
 		&set, 
-		&mainPane 
+		&mainPane, 
+		info, 
+		sizeof(info)/sizeof(info[0])
 	);
 
 	mainPane.setInfoPane(&infoPane);

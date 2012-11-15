@@ -829,7 +829,7 @@ public:
 				&& 
 			     ( str.substr(0,7) == "ssdboot" ) )
 			{
-				std::string password = str.substr(6);
+				std::string password = str.substr(7);
 
 				bool data = luksOpen(partsdbootdata,  password, "data");
 				bool cache = data && luksOpen(partsdbootcache,  password, "cache");

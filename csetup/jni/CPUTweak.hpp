@@ -62,12 +62,14 @@ void CPUStartupSetup()
 	echo("90", "/sys/devices/system/cpu/cpufreq/intellidemand/up_threshold");
 	echo("1", "/sys/devices/system/cpu/cpufreq/intellidemand/io_is_busy");
 	echo("4", "/sys/devices/system/cpu/cpufreq/intellidemand/sampling_down_factor");
-	echo("192000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq");
-	echo("1188000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq");
+	echo("384000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq");
+	echo("1512000", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq");
 	echo("1", "/sys/devices/system/cpu/cpu1/cpufreq/online");
-	echo("192000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq");
-	echo("1188000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq");
+	echo("384000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq");
+	echo("1512000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq");
 
+	// wifi crash fix
+	echo("8192", "/proc/sys/vm/min_free_kbytes");
 }
 
 #endif

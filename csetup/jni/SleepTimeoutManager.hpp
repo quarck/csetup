@@ -25,47 +25,46 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __CONFIG_H__
-#define __CONFIG_H__
+#ifndef __SLEEP_TIMEOUT_MANAGER_H__
+#define __SLEEP_TIMEOUT_MANAGER_H__
+
+#include <sys/time.h>
 
 
-const char *touch_device = "/dev/input/event2";
-const char *keyboard_device = "/dev/input/event3";
-const char *fb_device = "/dev/graphics/fb0";
+class CSleepTimeoutManager
+{
+	time_t	m_tmLastUserEvent;
 
+	int 	m_nTimeout;
+public:
+	CSleepTimeoutManager()
+		: m_tmLastUserEvent( time(NULL) ) 
+		, m_nTimeout(40) // 30 secs
+	{
+	}
 
-const char *usbmsslun0file = "/sys/devices/virtual/android_usb/android0/f_mass_storage/lun0/file";
+	void onUserEvent()
+	{
+		m_tmLastUserEvent = time(NULL);
+	}
 
+	void setSleepTimeout(int pTimeout)
+	{
+		m_nTimeout = pTimeout;
+	}
 
-const char *lettersbmp = "/system/csetup/letters.bmp";
-const char *letterssmallbmp = "/system/csetup/letterssmall.bmp";
+	int getSleepTimeout() const
+	{
+		return m_nTimeout;
+	}
 
-const char *cryptsetup = "/system/csetup/cryptsetup";
+	bool isTimeToSleep() const
+	{
+		time_t ltmNow = time(NULL);
 
-const char *devint = "/dev/block/mmcblk0";
-const char *devsdcard = "/dev/block/mmcblk1";
+		return (ltmNow > m_nTimeout + m_tmLastUserEvent);
+	}
+};
 
-const char *partmainsystem = "/dev/block/mmcblk0p22";
-const char *partmaindata = "/dev/block/mmcblk0p23";
-const char *partmaincache = "/dev/block/mmcblk0p24";
-const char *partmaindevlog = "/dev/block/mmcblk0p28";
-const char *partmainsd = "/dev/block/mmcblk1p1";
-
-/*
-const char *partsdbootdata = "/dev/block/mmcblk1p6";
-const char *partsdbootcache = "/dev/block/mmcblk1p5";
-const char *partsdbootdevlog = "/dev/block/mmcblk1p3"; // using emerg's devlog - use 'emerg' passwd 
-const char *partsdbootsd = "/dev/block/mmcblk1p9"; // using emerg's sd - use 'emerg' passwd
-const char *partsdbootsystem = "/dev/block/mmcblk1p8";
-*/
-
-const char *partemergdata = "/dev/block/mmcblk1p5";
-const char *partemergcache = "/dev/block/mmcblk1p6";
-const char *partemergdevlog = "/dev/block/mmcblk1p7";
-const char *partemergsd = "/dev/block/mmcblk1p8";
-
-const char *emergPasswd = "emerg";
-
-const char *dmFormatCmd = "/system/bin/mke2fs -T ext4 /dev/mapper/";
 
 #endif

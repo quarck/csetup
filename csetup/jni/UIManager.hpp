@@ -28,6 +28,8 @@
 #ifndef __UIMANAGER_HPP__
 #define __UIMANAGER_HPP__
 
+#include "PM.hpp"
+#include "SleepTimeoutManager.hpp"
 
 class UIManager 
 	: public TouchDevice
@@ -37,6 +39,8 @@ class UIManager
 	IWidget* m_activeButton;
 
 	FrameBuffer* m_fb;
+
+	CSleepTimeoutManager 	m_sleepTimeoutManager;
 
 	bool m_shouldQuit;
 
@@ -63,11 +67,22 @@ public:
 		m_shouldQuit = true;
 	}
 
+
+	void setSleepTimeout(int pTimeout)
+	{
+		m_sleepTimeoutManager.setSleepTimeout(pTimeout);	
+	}
+
+	int getSleepTimeout() const
+	{
+		return m_sleepTimeoutManager.getSleepTimeout();
+	}
+
+
 	void onKeyDown(int code)
 	{
 		if ( code == KEY_POWER )
 		{
-//			system("/system/bin/shutdown -h now");
 		}
 	}
 	
@@ -75,7 +90,7 @@ public:
 	{
 		if ( code == KEY_POWER )
 		{
-//			system("/system/bin/shutdown -h now");
+			CPM::shutdown();
 		}
 	}
 
@@ -134,6 +149,8 @@ public:
 			m_fb->switchToActiveBuf();
 			m_fb->setUpdated();
 		}
+
+		
 	}
 
 	void setActivePane(UIPane* pane)
@@ -191,7 +208,7 @@ public:
 
 			timeval tv;
 
-			tv.tv_sec = 30;
+			tv.tv_sec = 10;
 			tv.tv_usec = 0;
 
 			int sRet = select( maxFd+1, &rSet, NULL, NULL, &tv);
@@ -199,14 +216,21 @@ public:
 			if ( FD_ISSET(tRead, &rSet ) )
 			{
 				this->TouchDevice::onFDReadReady();
+				m_sleepTimeoutManager.onUserEvent();
 			}
 
 			if ( FD_ISSET(kRead, &rSet ) ) 
 			{
 				this->KeyboardDevice::onFDReadReady();
+				m_sleepTimeoutManager.onUserEvent();
 			}
 
 			onIter();
+
+			if ( m_sleepTimeoutManager.isTimeToSleep() ) 
+			{
+				CPM::shutdown();
+			}
 		}
 		
 		// Do A final re-paint

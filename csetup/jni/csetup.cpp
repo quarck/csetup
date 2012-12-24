@@ -57,6 +57,8 @@
 
 #include "UI.hpp"
 
+#include "PM.hpp"
+
 #include "FrameBuffer.hpp"
 
 #include "TouchDevice.hpp"
@@ -201,7 +203,7 @@ public:
 		
 	void onActivated()
 	{
-		gc()->setBGColor( rgb(90,90,127) );
+		gc()->setBGColor( rgb(36,36,46) );
 		gc()->setColor( rgb(255,255,255 ) );
 	}
 		
@@ -831,6 +833,7 @@ public:
 		{
 			const std::string& str = m_pane->edit()->getString();
 
+			/*
 			if ( ( str.size() > 6 )
 				&& 
 			     ( str.substr(0,6) == "sdboot" ) )
@@ -878,45 +881,47 @@ public:
 					}
 				}
 			}
-			else if ( str == "cmdadb" )
+			else*/ if ( str == "cmdadb" )
 			{
 				system("PATH='/system/bin:/system/xbin:/system/csetup:' /sbin/adbd");
 				m_pane->edit()->setString("");
-			}
-			else if ( str == "cmdadb2" )
-			{
-				system("/sbin/adbd");
-				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdadbd" )
 			{
 				system("PATH='/system/bin:/system/xbin:/system/csetup:' /sbin/adbd </dev/null >/dev/null 2>/dev/null &");
 				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdusbsd" )
 			{
 				usbMssExport(devsdcard);
 				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdusbdata" ) 
 			{
 				usbMssExport(partmaindata);
 				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdusbsystem" ) 
 			{
 				usbMssExport(partmainsystem);
 				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdusbcache" ) 
 			{
 				usbMssExport(partmaincache);
 				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdusbdevlog" )
 			{
 				usbMssExport(partmaindevlog);
 				m_pane->edit()->setString("");
+				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
 			else if ( str == "cmdformat" ) 
 			{
@@ -934,10 +939,11 @@ public:
 					"128"	
 					);
 				
-				m_pane->manager()->setActivePane ( pane );
+				m_pane->manager()->setSleepTimeout(2000);
 
+				m_pane->manager()->setActivePane ( pane );
 			}
-			else if ( str == "cmdformatsdboot" )
+		/*	else if ( str == "cmdformatsdboot" )
 			{
 				m_pane->edit()->setString("");
 
@@ -954,7 +960,7 @@ public:
 					);
 				
 				m_pane->manager()->setActivePane ( pane );
-			}
+			} */
 			else if ( str == "cmdformatemerg" ) 
 			{
 				m_pane->edit()->setString("");
@@ -970,6 +976,8 @@ public:
 					partemergsd,
 					"128"	
 					);
+				
+				m_pane->manager()->setSleepTimeout(2000);
 
 				pane->setPassword(emergPasswd);
 				
@@ -991,9 +999,12 @@ public:
 						partmainsd	
 					);
 				
+				m_pane->manager()->setSleepTimeout(2000);
+				
 				m_pane->manager()->setActivePane ( passwd );
 
 			}
+			/*
 			else if ( str == "cmdpasswdsdboot" )
 			{
 				m_pane->edit()->setString("");
@@ -1010,7 +1021,7 @@ public:
 					);
 				
 				m_pane->manager()->setActivePane ( passwd );
-			}
+			}*/
 			else
 			{
 				const std::string& password = str;
@@ -1086,8 +1097,7 @@ public:
 		}
 		void onBtnClick()
 		{
-			system("/system/bin/shutdown -h now");			
-			system("/system/xbin/poweroff");			
+			CPM::shutdown();
 		}		
 	};
 	

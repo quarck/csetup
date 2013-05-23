@@ -833,55 +833,7 @@ public:
 		{
 			const std::string& str = m_pane->edit()->getString();
 
-			/*
-			if ( ( str.size() > 6 )
-				&& 
-			     ( str.substr(0,6) == "sdboot" ) )
-			{
-				std::string password = str.substr(6);
-
-				bool data = luksOpen(partsdbootdata,  password, "data");
-				bool cache = data && luksOpen(partsdbootcache,  password, "cache");
-				bool devlog = data && luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
-			
-				bool sd = data && luksOpen(partsdbootsd, emergPasswd, "sd");
-
-				if ( data && cache && devlog ) 
-				{
-					tweakCPUandIOSched();
-
-					m_pane->welcomeMessage("Booting into SD");
-
-					m_pane->manager()->setShouldQuit();
-				}
-			}
-			if ( ( str.size() > 7 )
-				&& 
-			     ( str.substr(0,7) == "ssdboot" ) )
-			{
-				std::string password = str.substr(7);
-
-				bool data = luksOpen(partsdbootdata,  password, "data");
-				bool cache = data && luksOpen(partsdbootcache,  password, "cache");
-				bool devlog = data && luksOpen(partsdbootdevlog,  emergPasswd, "devlog");
-			
-				bool sd = data && luksOpen(partmainsd, password, "sd");
-
-				if ( data && cache && devlog ) 
-				{
-					std::string cmd = std::string("mount -t ext4 -r ") + partsdbootsystem + " /system";
-
-					if ( system(cmd.c_str()) == 0 ) 
-					{
-						tweakCPUandIOSched();
-
-						m_pane->welcomeMessage("Booting into SD");
-
-						m_pane->manager()->setShouldQuit();
-					}
-				}
-			}
-			else*/ if ( str == "cmdadb" )
+			if ( str == "cmdadb" )
 			{
 				system("PATH='/system/bin:/system/xbin:/system/csetup:' /sbin/adbd");
 				m_pane->edit()->setString("");
@@ -895,31 +847,19 @@ public:
 			}
 			else if ( str == "cmdusbsd" )
 			{
-				usbMssExport(devsdcard);
+				usbMssExport(dev_external);
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
-			else if ( str == "cmdusbdata" ) 
+			else if ( str == "cmdusbint" ) 
 			{
-				usbMssExport(partmaindata);
+				usbMssExport(part_internal);
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
-			else if ( str == "cmdusbsystem" ) 
+			else if ( str == "cmdusbext" || str == "cmdusb" ) 
 			{
-				usbMssExport(partmainsystem);
-				m_pane->edit()->setString("");
-				m_pane->manager()->setSleepTimeout(3600*25*365);
-			}
-			else if ( str == "cmdusbcache" ) 
-			{
-				usbMssExport(partmaincache);
-				m_pane->edit()->setString("");
-				m_pane->manager()->setSleepTimeout(3600*25*365);
-			}
-			else if ( str == "cmdusbdevlog" )
-			{
-				usbMssExport(partmaindevlog);
+				usbMssExport(part_external);
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
@@ -932,9 +872,9 @@ public:
 					m_pane->gc(), 
 					m_pane->set(), 
 					m_pane,
-					partmaindata,
-					partmaincache,
-					partmaindevlog,
+					part_external,
+					"",
+					"",
 					"",
 					"128"	
 					);
@@ -942,25 +882,7 @@ public:
 				m_pane->manager()->setSleepTimeout(2000);
 
 				m_pane->manager()->setActivePane ( pane );
-			}
-		/*	else if ( str == "cmdformatsdboot" )
-			{
-				m_pane->edit()->setString("");
-
-				FormatPane *pane = new FormatPane(
-					m_pane->manager(), 
-					m_pane->gc(), 
-					m_pane->set(), 
-					m_pane,
-					partsdbootdata,
-					partsdbootcache,
-					"",
-					"",
-					"128"	
-					);
-				
-				m_pane->manager()->setActivePane ( pane );
-			} */
+			}		
 			else if ( str == "cmdformatemerg" ) 
 			{
 				m_pane->edit()->setString("");
@@ -970,10 +892,10 @@ public:
 					m_pane->gc(), 
 					m_pane->set(), 
 					m_pane,
-					partemergdata,
-					partemergcache,
-					partemergdevlog,
-					partemergsd,
+					part_internal,
+					"",
+					"",
+					"",
 					"128"	
 					);
 				
@@ -993,10 +915,10 @@ public:
 						m_pane->gc(),
 						m_pane->set(),
 						m_pane,
-						partmaindata,
-						partmaincache,
-						partmaindevlog,
-						partmainsd	
+						part_external,
+						"",
+						"",
+						""	
 					);
 				
 				m_pane->manager()->setSleepTimeout(2000);
@@ -1004,35 +926,11 @@ public:
 				m_pane->manager()->setActivePane ( passwd );
 
 			}
-			/*
-			else if ( str == "cmdpasswdsdboot" )
-			{
-				m_pane->edit()->setString("");
-
-				PasswordChangePane *passwd = new PasswordChangePane(
-						m_pane->manager(),
-						m_pane->gc(),
-						m_pane->set(),
-						m_pane,
-						partsdbootdata,
-						partsdbootcache,
-						"",
-						""	
-					);
-				
-				m_pane->manager()->setActivePane ( passwd );
-			}*/
 			else
 			{
 				const std::string& password = str;
 
-				bool data = luksOpen(partmaindata,  password, "data");
-				bool cache = data && luksOpen(partmaincache,  password, "cache");
-				bool devlog = data && luksOpen(partmaindevlog,  password, "devlog");
-
-				bool sd = data && luksOpen(partmainsd, password, "sd");
-				
-				if ( data && cache && devlog ) 
+				if ( luksOpen(part_external,  password, "data") ) 
 				{
 					tweakCPUandIOSched();
 					
@@ -1125,13 +1023,9 @@ public:
 
 		void onBtnClick()
 		{
-			bool data = luksOpen(partemergdata,  emergPasswd, "data");
-			bool cache = luksOpen(partemergcache,  emergPasswd, "cache");
-			bool devlog = luksOpen(partemergdevlog,  emergPasswd, "devlog");
-				
-			bool sd = luksOpen(partemergsd, emergPasswd, "sd");
+			bool data = luksOpen(part_internal,  emergPasswd, "data");
 
-			if ( data && cache && devlog ) 
+			if ( data ) 
 			{
 				m_pane->welcomeMessage("Starting...");
 

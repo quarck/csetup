@@ -65,7 +65,6 @@ class TouchDevice
 
 	bool m_touchActive;
 	bool m_prevTouchActive;
-
 public:
 	virtual void onTouchDown(int x, int y) = 0;
 
@@ -162,15 +161,20 @@ public:
 				m_y = m_yRes * (ev.value -m_absy.minimum) / (m_absy.maximum - m_absy.minimum + 1);
 				m_touchActive = true;
 				break;
-			case ABS_MT_PRESSURE:
-				if ( ev.value == 0 )
-					m_touchActive = 0;
-				break;
-			case ABS_MT_TOUCH_MAJOR:
-				if ( ev.value == 0 ) 
-					m_touchActive = 0;					
-				break;
+//			case ABS_MT_PRESSURE:
+//				if ( ev.value == 0 )
+//					m_touchActive = 0;
+//				break;
+//			case ABS_MT_TOUCH_MAJOR:
+//				if ( ev.value == 0 ) 
+//					m_touchActive = 0;					
+//				break;
 			case ABS_MT_TOUCH_MINOR:
+				break;
+			
+			case ABS_MT_TRACKING_ID:
+				if ( (signed int)ev.value  == -1)
+					m_touchActive = false;
 				break;
 				
 			default:

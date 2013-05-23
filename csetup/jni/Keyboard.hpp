@@ -188,8 +188,8 @@ public:
 
 		for (int i=0; i<sizeof(lineZ)-1; i++ )
 		{
-			Rect visual (i * 45 + xbase, ybase, 45-4, 80-4);
-			Rect active (i * 45 + xbase - 2, ybase-2, 45, 80);
+			Rect visual (i * 60 + xbase, ybase, 60-4, 100-4);
+			Rect active (i * 60 + xbase - 2, ybase-2, 60, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -204,12 +204,12 @@ public:
 			m_buttons.push_back(btn);
 		}
 		
-		ybase += 80;
+		ybase += 100;
 		
 		for (int i=0; i<sizeof(lineA)-1; i++ )
 		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+			Rect visual (i * 72 + xbase, ybase, 72-4, 100-4);
+			Rect active (i * 72 + xbase - 2, ybase-2, 72, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -224,13 +224,13 @@ public:
 			m_buttons.push_back(btn);
 		}
 		
-		ybase += 80;
+		ybase += 100;
 
 		
 		for (int i=0; i<sizeof(lineB)-1; i++ )
 		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+			Rect visual (i * 72 + xbase, ybase, 72-4, 100-4);
+			Rect active (i * 72 + xbase - 2, ybase-2, 72, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -246,12 +246,12 @@ public:
 
 		}
 		
-		ybase += 110;
+		ybase += 130;
 
 		for (int i=0; i<sizeof(line0)-1; i++ )
 		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+			Rect visual (i * 72 + xbase, ybase, 72-4, 100-4);
+			Rect active (i * 72 + xbase - 2, ybase-2, 72, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -266,12 +266,12 @@ public:
 			m_buttons.push_back(btn);
 		}
 		
-		ybase += 90;
+		ybase += 110;
 
 		for (int i=0; i<sizeof(line1lc)-1; i++ )
 		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+			Rect visual (i * 72 + xbase, ybase, 72-4, 100-4);
+			Rect active (i * 72 + xbase - 2, ybase-2, 72, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -286,13 +286,13 @@ public:
 			m_buttons.push_back(btn);
 		}
 
-		ybase += 80;
-		xbase += 54*2/3;
+		ybase += 100;
+		xbase += 72*2/3;
 
 		for (int i=0; i<sizeof(line2lc)-1; i++ )
 		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+			Rect visual (i * 72 + xbase, ybase, 72-4, 100-4);
+			Rect active (i * 72 + xbase - 2, ybase-2, 72, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -307,13 +307,13 @@ public:
 			m_buttons.push_back(btn);
 		}
 
-		ybase += 80;
-		xbase += 54*2/3;
+		ybase += 100;
+		xbase += 72*2/3;
 
 		for (int i=0; i<sizeof(line3lc)-1; i++ )
 		{
-			Rect visual (i * 54 + xbase, ybase, 50, 80-4);
-			Rect active (i * 54 + xbase - 2, ybase-2, 54, 80);
+			Rect visual (i * 72 + xbase, ybase, 72-4, 100-4);
+			Rect active (i * 72 + xbase - 2, ybase-2, 72, 100);
 
 			LetterButton* btn = 
 				new LetterButton(
@@ -332,8 +332,8 @@ public:
 			new BackspaceButton(
 					m_editable,
 					m_gc, 
-					Rect ( 7 * 54 + xbase + 5, ybase, 80, 80-4), 
-					Rect ( 7 * 54 + xbase + 5- 2, ybase-2, 84, 80),
+					Rect ( 7 * 72 + xbase + 5, ybase, 100, 100-4), 
+					Rect ( 7 * 72 + xbase + 5- 2, ybase-2, 104, 100),
 					Point(15, 7), 
 					set, 
 					ID_BACKSPACE
@@ -345,8 +345,8 @@ public:
 				m_editable,
 				this,
 				m_gc, 
-				Rect (  2, ybase, 66, 80-4), 
-				Rect ( 2, ybase-2, 66, 80),
+				Rect (  2, ybase, 88, 100-4), 
+				Rect ( 2, ybase-2, 88, 100),
 				Point(10, 5), 
 				set, 
 				ID_SHIFT, ID_SHIFT_ACTIVE

@@ -177,15 +177,15 @@ public:
 		) 
 		: UIPane ( manager, rscSet, fb )
 	{
-		m_edit = new TextEdit( gc(), Rect(5, 10, 540-54-10, 100), Size(30, 60), Point(10,25), set(), true);
+		m_edit = new TextEdit( gc(), Rect(5, 10, 720-72-10, 100), Size(30, 60), Point(10,25), set(), true);
 		
 		this->add(m_edit);
 
 		ClearButton *clearBtn = new ClearButton(
 				m_edit,
 				gc(), 
-				Rect (540-50-5, 10, 50, 100), 
-				Rect (540-54-5, 10, 54, 100),
+				Rect (720-72-4-5, 10, 50, 100), 
+				Rect (720-72-5, 10, 54, 100),
 				Point(10, 25), 
 				set()
 			);
@@ -203,7 +203,7 @@ public:
 		
 	void onActivated()
 	{
-		gc()->setBGColor( rgb(36,36,46) );
+		gc()->setBGColor( rgb(0, 0, 0) );
 		gc()->setColor( rgb(255,255,255 ) );
 	}
 		
@@ -283,7 +283,7 @@ public:
 		, m_bKeyOK ( false )
 	{
 
-		m_label = new TextEdit( fb, Rect(5, 110, 540-5, 80), Size(30, 60), Point(10,10), set(), false);
+		m_label = new TextEdit( fb, Rect(5, 110, 720-5, 80), Size(30, 60), Point(10,10), set(), false);
 
 		m_label->setString("Security Key");
 
@@ -292,8 +292,8 @@ public:
 		this->add(  
 			new CancelButton(
 					this, 
-					Rect (20, 755+90, 209, 80), 
-					Rect (20, 755+90, 209, 80),
+					Rect (20, 920+90, 209, 80), 
+					Rect (20, 920+90, 209, 80),
 					Point(2, 11)
 				)
 			);
@@ -301,8 +301,8 @@ public:
 		this->add(  
 			new OKButton(
 					this, 
-					Rect (440, 755+90, 85, 80), 
-					Rect (440, 755+90, 85, 80),
+					Rect (620, 920+90, 85, 80), 
+					Rect (620, 920+90, 85, 80),
 					Point(2, 11)
 				)
 			);
@@ -519,7 +519,7 @@ public:
 		, m_sdDevice ( sdDevice )
 	{
 
-		m_label = new TextEdit( fb, Rect(5, 110, 540-5, 80), Size(30, 60), Point(10,10), set(), false);
+		m_label = new TextEdit( fb, Rect(5, 110,720-5, 80), Size(30, 60), Point(10,10), set(), false);
 
 		m_label->setString("Current Pwd");
 
@@ -528,8 +528,8 @@ public:
 		this->add(  
 			new CancelButton(
 					this, 
-					Rect (20, 755+90, 209, 80), 
-					Rect (20, 755+90, 209, 80),
+					Rect (20, 920+90, 209, 80), 
+					Rect (20, 920+90, 209, 80),
 					Point(2, 11)
 				)
 			);
@@ -537,8 +537,8 @@ public:
 		this->add(  
 			new OKButton(
 					this, 
-					Rect (440, 755+90, 85, 80), 
-					Rect (440, 755+90, 85, 80),
+					Rect (620, 920+90, 85, 80), 
+					Rect (620, 920+90, 85, 80),
 					Point(2, 11)
 				)
 			);
@@ -750,8 +750,8 @@ public:
 		this->add(  
 			new CancelButton(
 					this, 
-					Rect (20, 755, 209, 80), 
-					Rect (20, 755, 209, 80),
+					Rect (20, 920, 209, 80), 
+					Rect (20, 920, 209, 80),
 					Point(2, 11)
 				)
 			);
@@ -759,8 +759,8 @@ public:
 		this->add(  
 			new InfoButton(
 					this,
-					Rect (263, 755, 139, 80), 
-					Rect (263, 755, 139, 80),
+					Rect (293, 920, 139, 80), 
+					Rect (293, 920, 139, 80),
 					Point(2, 11)
 				)
 			);
@@ -768,8 +768,8 @@ public:
 		this->add(  
 			new OKButton(
 					this, 
-					Rect (440, 755, 85, 80), 
-					Rect (440, 755, 85, 80),
+					Rect (620, 920, 85, 80), 
+					Rect (620, 920, 85, 80),
 					Point(2, 11)
 				)
 			);
@@ -777,8 +777,8 @@ public:
 		this->add(  
 			new EmergencyButton(
 					this, 
-					Rect (100, 850, 322, 80), 
-					Rect (100, 850, 322, 80),
+					Rect (100, 1070, 322, 80), 
+					Rect (100, 1070, 322, 80),
 					Point(2, 11)
 				)
 			);

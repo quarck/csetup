@@ -34,7 +34,7 @@ bool usbMssExport(const char *device)
 {
 	bool ret = false;
 
-	FILE *l0file = fopen(usbmsslun0file, "w");
+	FILE *l0file = fopen(usbmsslun0file0, "w");
 	
 	if ( l0file )
 	{
@@ -42,7 +42,19 @@ bool usbMssExport(const char *device)
 		fclose(l0file);
 		ret = true;
 	}
-	
+
+	if ( ret ) 
+	{
+		FILE *l1file = fopen(usbmsslun0file1, "w");
+		
+		if ( l1file )
+		{
+			fprintf(l1file, "%s\n", device);
+			fclose(l1file);
+			ret = true;
+		}
+	}
+
 	return ret;
 }
 

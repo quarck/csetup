@@ -35,6 +35,7 @@ public:
 	{
 		system("/system/bin/shutdown -h now");			
 		system("/system/xbin/poweroff");			
+		system("/system/bin/reboot -p");			
 	}
 };
 

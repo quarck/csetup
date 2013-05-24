@@ -30,6 +30,15 @@
 
 #include "config.h"
 
+bool linkOpen(const std::string& dev, const std::string& dmname)
+{
+	mkdir("/dev/mapper", 0755); // if does not exists
+	
+	std::string newName = "/dev/mapper/" + dmname;
+
+	return (link(dev.c_str(), newName.c_str()) == 0) ? true : false;
+}
+
 bool luksOpen(const std::string& dev, const std::string& password, const std::string& dmname)
 {
 	bool ret = false;

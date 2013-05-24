@@ -99,7 +99,7 @@ public:
 
 
 public:
-	inline FrameBuffer(const char* dev)
+	inline FrameBuffer(const char* dev, int maxBuffers=2)
 		: m_fd ( -1 )
 		, m_fb ( NULL )
 		, m_size ( 0 )
@@ -120,13 +120,18 @@ public:
 
 				m_bytes_per_line = m_vinfo.xres_virtual * m_bytes_per_pixel;
 
+				if ( m_vinfo.yres_virtual / m_vinfo.yres > maxBuffers ) 
+				{
+					m_vinfo.yres_virtual = m_vinfo.yres * maxBuffers;
+				}
+
 				// Figure out the size of the screen in bytes
 				m_size = m_vinfo.xres_virtual * m_vinfo.yres_virtual * m_bytes_per_pixel;
 
-				printf("xres=%d,yres=%d,vxres=%d,vyres=%d, m_size=%d, bytes_per_line=%d\n", 
+/*				printf("xres=%d,yres=%d,vxres=%d,vyres=%d, m_size=%d, bytes_per_line=%d\n", 
 					m_vinfo.xres, m_vinfo.yres, 
 					m_vinfo.xres_virtual, m_vinfo.yres_virtual, 
-					m_size, m_bytes_per_line);
+					m_size, m_bytes_per_line); */
 
 				m_max_buffers = m_vinfo.yres_virtual / m_vinfo.yres;
 

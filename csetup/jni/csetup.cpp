@@ -833,7 +833,11 @@ public:
 		{
 			const std::string& str = m_pane->edit()->getString();
 
-			if ( str == "cmdadb" )
+			if ( str == "exit" ) 
+			{
+				exit(0);
+			}
+			else if ( str == "cmdadb" )
 			{
 				system("PATH='/system/bin:/system/xbin:/system/csetup:' /sbin/adbd");
 				m_pane->edit()->setString("");
@@ -847,6 +851,7 @@ public:
 			}
 			else if ( str == "cmdusbsd" )
 			{
+				// whole SD
 				usbMssExport(dev_external);
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
@@ -883,29 +888,6 @@ public:
 
 				m_pane->manager()->setActivePane ( pane );
 			}		
-			else if ( str == "cmdformatemerg" ) 
-			{
-				m_pane->edit()->setString("");
-
-				FormatPane *pane = new FormatPane(
-					m_pane->manager(), 
-					m_pane->gc(), 
-					m_pane->set(), 
-					m_pane,
-					part_internal,
-					"",
-					"",
-					"",
-					"128"	
-					);
-				
-				m_pane->manager()->setSleepTimeout(2000);
-
-				pane->setPassword(emergPasswd);
-				
-				m_pane->manager()->setActivePane ( pane );
-
-			}
 			else if ( str == "cmdpasswd" ) 
 			{
 				m_pane->edit()->setString("");
@@ -1023,7 +1005,7 @@ public:
 
 		void onBtnClick()
 		{
-			bool data = luksOpen(part_internal,  emergPasswd, "data");
+			bool data = linkOpen(part_internal, "data");
 
 			if ( data ) 
 			{
@@ -1040,10 +1022,15 @@ int main(int argc, char *argv[])
 {
 	CPUStartupSetup();
 
+	int maxBuffers = 2;
+	
+	if ( argc >= 2 && strcmp(argv[1], "-u") == 0)
+		maxBuffers = 10;
+
 	//
 	// open FB dev
 	//
-	FrameBuffer fb(fb_device);
+	FrameBuffer fb(fb_device, maxBuffers);
 
 	if ( !fb.isValid() ) 
 	{

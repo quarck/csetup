@@ -56,7 +56,10 @@ void tweakCPUandIOSched()
 
 void CPUStartupSetup() 
 {
+	// wifi crash fix
+	echo("8192", "/proc/sys/vm/min_free_kbytes");
 	return;
+
 	echo("1", "/sys/module/rpm_resources/enable_low_power/L2_cache");
 	echo("1", "/sys/module/rpm_resources/enable_low_power/pxo");
 	echo("2", "/sys/module/rpm_resources/enable_low_power/vdd_dig");
@@ -96,8 +99,6 @@ void CPUStartupSetup()
 	echo("384000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq");
 	echo("1512000", "/sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq");
 
-	// wifi crash fix
-	echo("8192", "/proc/sys/vm/min_free_kbytes");
 }
 
 #endif

@@ -34,7 +34,8 @@ const char *keyboard_device = "/dev/input/event3";
 const char *fb_device = "/dev/graphics/fb0";
 
 
-const char *usbmsslun0file = "/sys/devices/virtual/android_usb/android0/f_mass_storage/lun0/file";
+const char *usbmsslun0file0 = "/sys/devices/virtual/android_usb/android0/f_mass_storage/lun0/file";
+const char *usbmsslun0file1 = "/sys/devices/platform/s3c-usbgadget/gadget/lun0/file";
 
 
 const char *lettersbmp = "/system/csetup/letters.bmp";
@@ -44,7 +45,7 @@ const char *cryptsetup = "/system/xbin/cryptsetup";
 
 const char *part_internal = "/dev/block/mmcblk0p12";
 const char *dev_external = "/dev/block/mmcblk1";
-const char *part_external = "/dev/block/mmcblk1p1";
+const char *part_external = "/dev/block/mmcblk1p2";
 
 const char *emergPasswd = "emerg";
 

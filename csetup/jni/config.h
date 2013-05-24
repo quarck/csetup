@@ -49,6 +49,6 @@ const char *part_external = "/dev/block/mmcblk1p2";
 
 const char *emergPasswd = "emerg";
 
-const char *dmFormatCmd = "/system/bin/mke2fs -T ext4 /dev/mapper/";
+const char *dmFormatCmd = "/system/bin/mke2fs -T ext4 -j /dev/mapper/";
 
 #endif

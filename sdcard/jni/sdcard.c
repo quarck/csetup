@@ -96,7 +96,7 @@ struct handle {
 
 struct dirhandle {
     DIR *d;
-    int isnomedia;
+    int isforbidden;
 };
 
 struct node {
@@ -1052,13 +1052,13 @@ static int handle_opendir(struct fuse* fuse, struct fuse_handler* handler,
         return -errno;
     }
 
-    char pathNoMedia[PATH_MAX];
-    strcpy(pathNoMedia, path);
-    strncat(pathNoMedia, "/.nomedia", PATH_MAX);
+    char pathforbid[PATH_MAX];
+    strcpy(pathforbid, path);
+    strncat(pathforbid, "/.forbid", PATH_MAX);
 
-    if ( access(pathNoMedia, F_OK) == 0 ) 
+    if ( access(pathforbid, F_OK) == 0 ) 
     {
-	h->isnomedia = 1;
+	h->isforbidden = 1;
     }
 
     out.fh = ptr_to_id(h);
@@ -1077,7 +1077,7 @@ static int handle_readdir(struct fuse* fuse, struct fuse_handler* handler,
     TRACE("[%d] READDIR %p\n", handler->token, h);
 
     // do not allow media server to read nomedia files!!!
-    if ( h->isnomedia )
+    if ( h->isforbidden )
     {
         int ismediaserver = 0;
         char buf[256];

@@ -270,4 +270,18 @@ bool volFormat(const std::string& device, const char *keySize, const std::string
 	return ret;
 }
 
+bool volMount(const std::string& device, const std::string& mountPoint, const std::string& fstype)
+{
+	std::string cmd = "/system/bin/mount -t " + fstype + " " + device + " " + mountPoint;
+
+	return system(cmd.c_str()) == 0;
+}
+
+bool volUmount(const std::string& mountPoint)
+{
+	std::string cmd = "/system/bin/umount " + mountPoint;
+	
+	return system(cmd.c_str()) == 0;
+}
+
 #endif

@@ -1132,6 +1132,12 @@ public:
 
 int main(int argc, char *argv[])
 {
+	if (argc == 2 && strcmp(argv[1], "--ensure-data-media") == 0 ) 
+	{
+		mkdir("/data/media", 0770);
+		return 0;
+	}
+
 	CPUStartupSetup();
 
 	int maxBuffers = 2;

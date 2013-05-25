@@ -29,6 +29,7 @@
 #define __UIMANAGER_HPP__
 
 #include "PM.hpp"
+#include "UIPingManager.hpp"
 #include "SleepTimeoutManager.hpp"
 
 class UIManager 
@@ -41,6 +42,7 @@ class UIManager
 	FrameBuffer* m_fb;
 
 	CSleepTimeoutManager 	m_sleepTimeoutManager;
+	CUIPingManager		m_pingManager;
 
 	bool m_shouldQuit;
 
@@ -76,6 +78,17 @@ public:
 	int getSleepTimeout() const
 	{
 		return m_sleepTimeoutManager.getSleepTimeout();
+	}
+
+
+	void setPingInterval(int pTimeout)
+	{
+		m_pingManager.setInterval(pTimeout);
+	}
+
+	void setPingReceiver(CUIPingManager::IUIPingReceiver* recv) 
+	{
+		m_pingManager.setReceiver(recv);
 	}
 
 
@@ -150,7 +163,7 @@ public:
 			m_fb->setUpdated();
 		}
 
-		
+		m_pingManager.onIter();
 	}
 
 	void setActivePane(UIPane* pane)
@@ -210,6 +223,11 @@ public:
 
 			tv.tv_sec = 10;
 			tv.tv_usec = 0;
+
+			if ( m_pingManager.isActive() ) 
+			{
+				tv.tv_sec = m_pingManager.getInterval();
+			}
 
 			int sRet = select( maxFd+1, &rSet, NULL, NULL, &tv);
 			

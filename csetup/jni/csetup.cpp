@@ -83,6 +83,118 @@
 
 #include "securityKey.hpp"
 
+
+class CountdownPane 
+	: public UIPane 
+	, public CUIPingManager::IUIPingReceiver
+{
+	class UnlockButton : public TextEdit 
+	{
+		CountdownPane* m_pane;
+	public:
+		inline UnlockButton(
+				CountdownPane* pane,
+				Point ptStart, 
+				Size ltrSize, 
+				Point offs, 
+				ImageRscSet* font, 
+				const std::string& string
+				)
+			: TextEdit(pane->gc(), ptStart, ltrSize, offs, font, string) 
+			, m_pane ( pane )
+		{
+			this->setInvertColorOnActivate ( true );
+		}
+
+		void onBtnClick()
+		{
+			m_pane->manager()->setActivePane( m_pane->nextPane() );
+		}
+	};
+
+
+	UIPane* m_nextPane;
+
+	int m_cnt;
+
+	UnlockButton* m_button;
+
+protected:	
+	UIPane* nextPane() 
+	{
+		return m_nextPane;
+	}
+
+public:
+	CountdownPane(
+			UIManager * manager,
+			IGraphics * gc, 
+			ImageRscSet* rscSet, 
+			UIPane* nextPane, 
+			int initialCount
+		) 
+		: UIPane ( manager, rscSet, gc )	
+		, m_nextPane ( nextPane )
+		, m_cnt ( initialCount )
+	{
+		char buf[128];
+		snprintf(buf, sizeof(buf), "%02d", m_cnt);
+
+		m_button = new UnlockButton(
+				this, 
+				Point(5,15), 
+				Size(30,60), 
+				Point(5, 5), 
+				set(), 
+				buf
+			);
+
+		this->add(m_button);
+
+		manager->setPingReceiver( this );
+		manager->setPingInterval( 1 );
+	}
+
+	void onPing()
+	{
+		m_cnt--;
+	
+		char buf[128];
+		snprintf(buf, sizeof(buf), "%02d", m_cnt);
+
+		m_button->setString(buf);
+		gc()->invalidate();
+
+		if ( m_cnt <= 0 ) 
+		{
+
+			bool data = linkOpen(part_internal, "data");
+
+			if ( data ) 
+			{
+				manager()->setShouldQuit();
+			}
+			else
+			{
+				// failback
+				manager()->setActivePane( nextPane() );
+			}
+		}
+	}
+
+	void onActivated()
+	{
+		gc()->setBGColor( rgb(0,0,0) );
+	}
+
+	void onDeactivated()
+	{
+		manager()->setPingReceiver( NULL );
+	}
+
+};
+
+
 class InfoPane : public UIPane 
 {
 	UIPane* m_prevPane; 
@@ -1082,6 +1194,15 @@ int main(int argc, char *argv[])
 		&set 
 	);
 
+	CountdownPane countdownPane(
+			&manager,
+			&fb, 
+			&set, 
+			&mainPane, 
+			6
+		); 
+
+
 #include "info.h"
 
 	InfoPane infoPane( 
@@ -1095,7 +1216,8 @@ int main(int argc, char *argv[])
 
 	mainPane.setInfoPane(&infoPane);
 
-	manager.setActivePane( &mainPane );
+	manager.setActivePane( &countdownPane );
+	//manager.setActivePane( &mainPane );
 
 	// Enter the main loop
 	manager.run();

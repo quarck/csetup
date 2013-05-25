@@ -1,3 +1,6 @@
+// NOTE: to build this library, pull /systme/lib/libc.so from your device, 
+// and put them into your NDK!
+
 /*
  * Copyright (C) 2010 The Android Open Source Project
  *
@@ -569,6 +572,7 @@ static int handle_getattr(struct fuse* fuse, struct fuse_handler* handler,
     return fuse_reply_attr(fuse, hdr->unique, hdr->nodeid, path);
 }
 
+#if 0
 static int handle_setattr(struct fuse* fuse, struct fuse_handler* handler,
         const struct fuse_in_header *hdr, const struct fuse_setattr_in *req)
 {
@@ -642,6 +646,66 @@ static int handle_setattr(struct fuse* fuse, struct fuse_handler* handler,
     }
     return fuse_reply_attr(fuse, hdr->unique, hdr->nodeid, path);
 }
+#endif
+
+static int handle_setattr(struct fuse* fuse, struct fuse_handler* handler,
+        const struct fuse_in_header *hdr, const struct fuse_setattr_in *req)
+{
+    struct node* node;
+    char path[PATH_MAX];
+    struct timespec times[2];
+
+    pthread_mutex_lock(&fuse->lock);
+    node = lookup_node_and_path_by_id_locked(fuse, hdr->nodeid, path, sizeof(path));
+    TRACE("[%d] SETATTR fh=%llx valid=%x @ %llx (%s)\n", handler->token,
+            req->fh, req->valid, hdr->nodeid, node ? node->name : "?");
+    pthread_mutex_unlock(&fuse->lock);
+
+    if (!node) {
+        return -ENOENT;
+    }
+
+    /* XXX: incomplete implementation on purpose.
+     * chmod/chown should NEVER be implemented.*/
+
+    if ((req->valid & FATTR_SIZE) && truncate(path, req->size) < 0) {
+        return -errno;
+    }
+
+    /* Handle changing atime and mtime.  If FATTR_ATIME_and FATTR_ATIME_NOW
+     * are both set, then set it to the current time.  Else, set it to the
+     * time specified in the request.  Same goes for mtime.  Use utimensat(2)
+     * as it allows ATIME and MTIME to be changed independently, and has
+     * nanosecond resolution which fuse also has.
+     */
+    if (req->valid & (FATTR_ATIME | FATTR_MTIME)) {
+        times[0].tv_nsec = UTIME_OMIT;
+        times[1].tv_nsec = UTIME_OMIT;
+        if (req->valid & FATTR_ATIME) {
+            if (req->valid & FATTR_ATIME_NOW) {
+              times[0].tv_nsec = UTIME_NOW;
+            } else {
+              times[0].tv_sec = req->atime;
+              times[0].tv_nsec = req->atimensec;
+            }
+        }
+        if (req->valid & FATTR_MTIME) {
+            if (req->valid & FATTR_MTIME_NOW) {
+              times[1].tv_nsec = UTIME_NOW;
+            } else {
+              times[1].tv_sec = req->mtime;
+              times[1].tv_nsec = req->mtimensec;
+            }
+        }
+        TRACE("[%d] Calling utimensat on %s with atime %ld, mtime=%ld\n",
+                handler->token, path, times[0].tv_sec, times[1].tv_sec);
+        if (utimensat(-1, path, times, 0) < 0) {
+            return -errno;
+        }
+    }
+    return fuse_reply_attr(fuse, hdr->unique, hdr->nodeid, path);
+}
+
 
 static int handle_mknod(struct fuse* fuse, struct fuse_handler* handler,
         const struct fuse_in_header* hdr, const struct fuse_mknod_in* req, const char* name)
@@ -867,15 +931,7 @@ static int handle_read(struct fuse* fuse, struct fuse_handler* handler,
     if (size > sizeof(handler->read_buffer)) {
         return -EINVAL;
     }
-    if ( offset <= 0x7fffffff)
-    {
-    	res = pread(h->fd, handler->read_buffer, size, offset);
-    }
-    else
-    {
-        lseek64(h->fd, offset, SEEK_SET);
-        res = read(h->fd, handler->read_buffer, size);
-    }
+    res = pread64(h->fd, handler->read_buffer, size, offset);
     if (res < 0) {
         return -errno;
     }
@@ -893,15 +949,7 @@ static int handle_write(struct fuse* fuse, struct fuse_handler* handler,
 
     TRACE("[%d] WRITE %p(%d) %u@%llu\n", handler->token,
             h, h->fd, req->size, req->offset);
-    if ( req->offset < 0x7fffffff )
-    {
-    	res = pwrite(h->fd, buffer, req->size, req->offset);
-    }
-    else
-    {
-        lseek(h->fd, req->offset, SEEK_SET);
-        res = write(h->fd, buffer, req->size);
-    }
+    res = pwrite64(h->fd, buffer, req->size, req->offset);
     if (res < 0) {
         return -errno;
     }

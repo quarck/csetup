@@ -97,6 +97,7 @@ struct handle {
 struct dirhandle {
     DIR *d;
     int isforbidden;
+    int allow_only_uid;
 };
 
 struct node {
@@ -1052,13 +1053,28 @@ static int handle_opendir(struct fuse* fuse, struct fuse_handler* handler,
         return -errno;
     }
 
-    char pathforbid[PATH_MAX];
-    strcpy(pathforbid, path);
-    strncat(pathforbid, "/.forbid", PATH_MAX);
+    char buf[PATH_MAX];
+    strcpy(buf, path);
+    strncat(buf, "/.forbid", PATH_MAX);
 
-    if ( access(pathforbid, F_OK) == 0 ) 
+    if ( access(buf, F_OK) == 0 ) 
     {
 	h->isforbidden = 1;
+    }
+
+    h->allow_only_uid = -1; // means everyone
+
+    strcpy(buf, path);
+    strncat(buf, "/.allowuid", PATH_MAX);
+
+    if ( access(buf, F_OK) == 0 ) 
+    {
+	    FILE* f = fopen(buf, "r");
+	    if ( f )
+	    {
+	    	fscanf(f, "%d", &(h->allow_only_uid));
+	    	fclose(f);
+	    }
     }
 
     out.fh = ptr_to_id(h);
@@ -1101,6 +1117,11 @@ static int handle_readdir(struct fuse* fuse, struct fuse_handler* handler,
 
         if ( ismediaserver )
             return 0;
+    }
+    else if ( h->allow_only_uid != -1 )
+    {
+	    if ( hdr->uid != h->allow_only_uid )
+		    return 0;
     }
 
     if (req->offset == 0) {

@@ -93,6 +93,7 @@ struct handle {
 
 struct dirhandle {
     DIR *d;
+    int isnomedia;
 };
 
 struct node {
@@ -991,6 +992,7 @@ static int handle_opendir(struct fuse* fuse, struct fuse_handler* handler,
     if (!node) {
         return -ENOENT;
     }
+
     h = malloc(sizeof(*h));
     if (!h) {
         return -ENOMEM;
@@ -1001,6 +1003,16 @@ static int handle_opendir(struct fuse* fuse, struct fuse_handler* handler,
         free(h);
         return -errno;
     }
+
+    char pathNoMedia[PATH_MAX];
+    strcpy(pathNoMedia, path);
+    strncat(pathNoMedia, "/.nomedia", PATH_MAX);
+
+    if ( access(pathNoMedia, F_OK) == 0 ) 
+    {
+	h->isnomedia = 1;
+    }
+
     out.fh = ptr_to_id(h);
     fuse_reply(fuse, hdr->unique, &out, sizeof(out));
     return NO_STATUS;
@@ -1015,6 +1027,34 @@ static int handle_readdir(struct fuse* fuse, struct fuse_handler* handler,
     struct dirhandle *h = id_to_ptr(req->fh);
 
     TRACE("[%d] READDIR %p\n", handler->token, h);
+
+    // do not allow media server to read nomedia files!!!
+    if ( h->isnomedia )
+    {
+        int ismediaserver = 0;
+        char buf[256];
+        int fd = -1;
+
+	snprintf(buf, sizeof(buf), "/proc/%d/cmdline", hdr->pid);
+        
+	fd = open(buf, O_RDONLY);
+
+        if ( fd != -1 ) 
+        {
+
+            memset(buf, 0, sizeof(buf));
+            int cnt = read(fd, buf, sizeof(buf)-1);
+            if ( cnt > 0 )
+                if ( strcmp(buf, "android.process.media") == 0 )
+                    ismediaserver = 1;
+
+            close(fd);
+        }
+
+        if ( ismediaserver )
+            return 0;
+    }
+
     if (req->offset == 0) {
         /* rewinddir() might have been called above us, so rewind here too */
         TRACE("[%d] calling rewinddir()\n", handler->token);

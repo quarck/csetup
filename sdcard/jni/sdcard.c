@@ -1118,7 +1118,7 @@ static int handle_readdir(struct fuse* fuse, struct fuse_handler* handler,
         if ( ismediaserver )
             return 0;
     }
-    else if ( h->allow_only_uid != -1 )
+    if ( h->allow_only_uid != -1 )
     {
 	    if ( hdr->uid != h->allow_only_uid )
 		    return 0;

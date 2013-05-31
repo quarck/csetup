@@ -1053,28 +1053,33 @@ static int handle_opendir(struct fuse* fuse, struct fuse_handler* handler,
         return -errno;
     }
 
-    char buf[PATH_MAX];
-    strcpy(buf, path);
-    strncat(buf, "/.forbid", PATH_MAX);
+    int pathLen = strlen(path);
 
-    if ( access(buf, F_OK) == 0 ) 
+    if ( PATH_MAX - pathLen >= 16 + 1 ) // if we have at least 16 bytes + 1 for zero left in the path buffer
     {
-	h->isforbidden = 1;
-    }
+        char buf[PATH_MAX];
+        strcpy(buf, path);
 
-    h->allow_only_uid = -1; // means everyone
+	strcpy(buf+pathLen, "/.forbid");
 
-    strcpy(buf, path);
-    strncat(buf, "/.allowuid", PATH_MAX);
+        if ( access(buf, F_OK) == 0 ) 
+        {
+	    h->isforbidden = 1;
+        }
 
-    if ( access(buf, F_OK) == 0 ) 
-    {
-	    FILE* f = fopen(buf, "r");
-	    if ( f )
-	    {
-	    	fscanf(f, "%d", &(h->allow_only_uid));
-	    	fclose(f);
-	    }
+        h->allow_only_uid = -1; // means everyone
+
+        strcpy(buf+pathLen, "/.allowuid");
+
+        if ( access(buf, F_OK) == 0 ) 
+        {
+	        FILE* f = fopen(buf, "r");
+	        if ( f )
+	        {
+	    	    fscanf(f, "%d", &(h->allow_only_uid));
+	    	    fclose(f);
+	        }
+        }
     }
 
     out.fh = ptr_to_id(h);

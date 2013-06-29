@@ -81,6 +81,8 @@
 
 #include "resources.hpp"
 
+#include "emergramdisk.hpp"
+
 #include "securityKey.hpp"
 
 
@@ -165,10 +167,11 @@ public:
 		m_button->setString(buf);
 		gc()->invalidate();
 
-		if ( m_cnt <= 0 ) 
+		if ( m_cnt == 0 ) 
 		{
 
-			bool data = linkOpen(part_internal, "data");
+			//bool data = createramdisk("/data", "/dev/mapper/data", 0) == 0 ? true : false; 
+			bool data = linkOpen(part_external, "data");
 
 			if ( data ) 
 			{
@@ -961,7 +964,7 @@ public:
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
-			else if ( str == "cmdusbsd" )
+			else if ( str == "cmdusbsd" || str == "cmdusb" )
 			{
 				// whole SD
 				usbMssExport(dev_external);
@@ -974,7 +977,7 @@ public:
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
-			else if ( str == "cmdusbext" || str == "cmdusb" ) 
+			else if ( str == "cmdusbext" ) 
 			{
 				usbMssExport(part_external);
 				m_pane->edit()->setString("");
@@ -989,7 +992,7 @@ public:
 					m_pane->gc(), 
 					m_pane->set(), 
 					m_pane,
-					part_external,
+					part_internal,
 					"",
 					"",
 					"",
@@ -1009,7 +1012,7 @@ public:
 						m_pane->gc(),
 						m_pane->set(),
 						m_pane,
-						part_external,
+						part_internal,
 						"",
 						"",
 						""	
@@ -1024,7 +1027,7 @@ public:
 			{
 				const std::string& password = str;
 
-				if ( luksOpen(part_external,  password, "data") ) 
+				if ( luksOpen(part_internal,  password, "data") ) 
 				{
 					tweakCPUandIOSched();
 					
@@ -1035,6 +1038,7 @@ public:
 			}
 		}
 	};
+
 
 	class InfoButton : public ImageButton
 	{
@@ -1117,7 +1121,8 @@ public:
 
 		void onBtnClick()
 		{
-			bool data = linkOpen(part_internal, "data");
+			//bool data = createramdisk("/data", "/dev/mapper/data", 0) == 0 ? true : false; 
+			bool data = linkOpen(part_external, "data");
 
 			if ( data ) 
 			{
@@ -1135,6 +1140,9 @@ int main(int argc, char *argv[])
 	if (argc == 2 && strcmp(argv[1], "--ensure-data-media") == 0 ) 
 	{
 		mkdir("/data/media", 0770);
+		mkdir("/cache/dalvik-cache", 775);
+		chown("/cache/dalvik-cache", 1000, 1000);
+		mount("/cache/dalvik-cache", "/data/dalvik-cache", "none", MS_BIND, "");
 		return 0;
 	}
 

@@ -60,7 +60,7 @@ int createramdisk(const char *mp, const char *loop, int loopNr)
 		{
 			memset(buf, 0, sizeof(buf));
 
-			for (int i=0; i<1024 * 130; i++ ) 
+			for (int i=0; i<1024 * 64; i++ ) 
 			{
 				if ( write(imgfd, buf, sizeof(buf)) != sizeof(buf))
 					break;

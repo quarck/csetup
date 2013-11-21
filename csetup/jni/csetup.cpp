@@ -170,8 +170,8 @@ public:
 		if ( m_cnt == 0 ) 
 		{
 
-			//bool data = createramdisk("/data", "/dev/mapper/data", 0) == 0 ? true : false; 
-			bool data = linkOpen(part_external, "data");
+			bool data = createramdisk("/data", "/dev/mapper/data", 0) == 0 ? true : false; 
+			//bool data = linkOpen(part_emerg, "data");
 
 			if ( data ) 
 			{
@@ -979,7 +979,7 @@ public:
 			}
 			else if ( str == "cmdusbext" ) 
 			{
-				usbMssExport(part_external);
+				usbMssExport(dev_external);
 				m_pane->edit()->setString("");
 				m_pane->manager()->setSleepTimeout(3600*25*365);
 			}
@@ -1021,7 +1021,66 @@ public:
 				m_pane->manager()->setSleepTimeout(2000);
 				
 				m_pane->manager()->setActivePane ( passwd );
+			}
+			else if ( str == "cmdformatsdboot" ) 
+			{
+				m_pane->edit()->setString("");
 
+				FormatPane *pane = new FormatPane(
+					m_pane->manager(), 
+					m_pane->gc(), 
+					m_pane->set(), 
+					m_pane,
+					part_sdboot,
+					"",
+					"",
+					"",
+					"128"	
+					);
+				
+				m_pane->manager()->setSleepTimeout(2000);
+
+				m_pane->manager()->setActivePane ( pane );
+			}		
+			else if ( str == "cmdpasswdsdboot" ) 
+			{
+				m_pane->edit()->setString("");
+
+				PasswordChangePane *passwd = new PasswordChangePane(
+						m_pane->manager(),
+						m_pane->gc(),
+						m_pane->set(),
+						m_pane,
+						part_sdboot,
+						"",
+						"",
+						""	
+					);
+				
+				m_pane->manager()->setSleepTimeout(2000);
+				
+				m_pane->manager()->setActivePane ( passwd );
+
+			}			
+			else if ( str == "cmdfailback")
+			{
+				execl( 	csetupfailback, 
+					csetupfailback, 
+					NULL
+					);
+			}
+			else if ( str.length() > 6 && str.substr(0, 6) == "sdboot" )
+			{
+				std::string password = str.substr(6);
+
+				if ( luksOpen(part_sdboot,  password, "data") ) 
+				{
+					tweakCPUandIOSched();
+					
+					m_pane->welcomeMessage("Welcome to SD-Boot");
+
+					m_pane->manager()->setShouldQuit();
+				}				
 			}
 			else
 			{
@@ -1121,8 +1180,8 @@ public:
 
 		void onBtnClick()
 		{
-			//bool data = createramdisk("/data", "/dev/mapper/data", 0) == 0 ? true : false; 
-			bool data = linkOpen(part_external, "data");
+			bool data = createramdisk("/data", "/dev/mapper/data", 0) == 0 ? true : false; 
+			//bool data = linkOpen(part_emerg, "data");
 
 			if ( data ) 
 			{
@@ -1145,7 +1204,7 @@ int main(int argc, char *argv[])
 		mount("/cache/dalvik-cache", "/data/dalvik-cache", "none", MS_BIND, "");
 		return 0;
 	}
-
+	
 	CPUStartupSetup();
 
 	int maxBuffers = 2;

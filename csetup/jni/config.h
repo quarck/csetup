@@ -43,12 +43,16 @@ const char *letterssmallbmp = "/system/csetup/letterssmall.bmp";
 
 const char *cryptsetup = "/system/xbin/cryptsetup";
 
+const char *csetupfailback = "/system/csetup/csetup.failback";
+
+const char *dev_internal = "/dev/block/mmcblk0";
 const char *part_internal = "/dev/block/mmcblk0p12";
+
 const char *dev_external = "/dev/block/mmcblk1";
-const char *part_external = "/dev/block/mmcblk1p2";
+const char *part_sdboot = "/dev/block/mmcblk1p2";
 
 const char *emergPasswd = "emerg";
 
-const char *dmFormatCmd = "/system/bin/mke2fs -T ext4 -j /dev/mapper/";
+const char *dmFormatCmd = "/system/xbin/busybox mke2fs -T ext4 -j /dev/mapper/";
 
 #endif
